@@ -5,7 +5,7 @@ FROM    ubuntu:20.04
 # Install the following packages
 RUN     apt-get update && apt-get install software-properties-common -y &&\
         add-apt-repository ppa:deadsnakes/ppa && apt-get update &&\
-        apt-get install python3.10.9 -y && apt install python3-pip -y &&\
+        apt-get install python3.11 -y && apt install python3-pip -y &&\
         pip3 install --upgrade pip &&\
         apt-get install graphviz -y && apt install libgl1-mesa-glx -y
 
