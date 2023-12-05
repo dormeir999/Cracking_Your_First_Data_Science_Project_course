@@ -14,6 +14,7 @@ from sklearn.model_selection import train_test_split
 from scipy import stats
 from scipy.stats import skew, kurtosis
 
+
 def print_function_name(func):
     """
     Decorator that prints the name of the function when it is called.
@@ -24,14 +25,17 @@ def print_function_name(func):
     Returns:
     - callable: The wrapped function.
     """
+
     def wrapper(*args, **kwargs):
         print(f"{func.__name__}()")
         return func(*args, **kwargs)
+
     return wrapper
 
 
 @print_function_name
-def transform_numeric_target_feature_to_binary(the_df: pd.DataFrame, target_col: str = 'quality', threshold: int = 7) -> pd.DataFrame:
+def transform_numeric_target_feature_to_binary(the_df: pd.DataFrame, target_col: str = 'quality',
+                                               threshold: int = 7) -> pd.DataFrame:
     """
    Transform a numeric target feature in a DataFrame into a binary representation.
 
@@ -49,7 +53,8 @@ def transform_numeric_target_feature_to_binary(the_df: pd.DataFrame, target_col:
 
 
 @print_function_name
-def split_dataset(the_df: pd.DataFrame, target_col: str, the_test_size: float = 0.2, the_random_state: int = 42) -> (pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame):
+def split_dataset(the_df: pd.DataFrame, target_col: str, the_test_size: float = 0.2, the_random_state: int = 42) -> (
+pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame):
     """
     Split a DataFrame into training, validation, and testing sets, while maintaining similar target distribution in all.
 
@@ -72,19 +77,24 @@ def split_dataset(the_df: pd.DataFrame, target_col: str, the_test_size: float = 
 
     # Split train into train and validation
     the_X_train, the_X_val, the_y_train, the_y_val = train_test_split(
-        the_X_train, the_y_train, test_size=the_test_size, stratify=the_y_train, shuffle=True, random_state=the_random_state
+        the_X_train, the_y_train, test_size=the_test_size, stratify=the_y_train, shuffle=True,
+        random_state=the_random_state
     )
 
     return the_X_train, the_X_test, the_X_val, the_y_train, the_y_test, the_y_val
 
-
+@print_function_name
 def test_if_significant(p_value, alpha=0.05, print_text=False):
     """
+    Tests if a given p-value is significant based on a specified alpha level.
 
-    :param p_value:
-    :param alpha:
-    :param print_text:
-    :return:
+    Parameters:
+    - p_value (float): The p-value to be tested.
+    - alpha (float, optional): The significance level threshold. Defaults to 0.05.
+    - print_text (bool, optional): If True, prints whether the means are significantly different. Defaults to False.
+
+    Returns:
+    - bool: True if p_value is less than alpha (significant), else False.
     """
     if p_value < alpha:
         if print_text:
@@ -94,6 +104,8 @@ def test_if_significant(p_value, alpha=0.05, print_text=False):
         if print_text:
             print("The means of the two populations are NOT significantly different (alpha={alpha}).")
         return False
+
+
 @print_function_name
 def test_if_features_statistically_different(the_X_train, dfs_dict, alpha=0.05):
     '''Check if mean of numerical features in X_train and dfs_dict are statistically the same, for specified significance level
@@ -108,15 +120,21 @@ def test_if_features_statistically_different(the_X_train, dfs_dict, alpha=0.05):
         # concat the other df means to the same dataframe
         train_val_outlier_means = pd.concat([train_val_outlier_means, X_df_outlier_means], axis=1)
         # calc the mean for both, just to get a sense of the size of difference
-        train_val_outlier_means['difference'] = (train_val_outlier_means['mean_train'] - train_val_outlier_means[f'mean_{the_df_name}']).round(3)
+        train_val_outlier_means['difference'] = (
+                    train_val_outlier_means['mean_train'] - train_val_outlier_means[f'mean_{the_df_name}']).round(3)
         for feature in train_val_outlier_means.index:
             # test the normality of the difference
             statatistic, p_value = stats.shapiro(the_X_train[feature] - the_df[feature])
-            train_val_outlier_means.loc[feature, f'{the_df_name} difference is normal with {int((1-alpha)*100)}% significance'] = not test_if_significant(p_value, alpha=alpha)
+            train_val_outlier_means.loc[
+                feature, f'{the_df_name} difference is normal with {int((1 - alpha) * 100)}% significance'] = not test_if_significant(
+                p_value, alpha=alpha)
             # perform the two-sample t-test for difference in means,
             t_statistic, p_value = stats.ttest_ind(the_X_train[feature], the_df[feature])
-            train_val_outlier_means.loc[feature, f'{the_df_name} mean is the same with {int((1-alpha)*100)}% significance'] = not test_if_significant(p_value, alpha=alpha)
+            train_val_outlier_means.loc[
+                feature, f'{the_df_name} mean is the same with {int((1 - alpha) * 100)}% significance'] = not test_if_significant(
+                p_value, alpha=alpha)
     return train_val_outlier_means
+
 
 @print_function_name
 def imputate_missing_values(dataset_name, dataset, the_train_statistics, n_rows_to_show=5, add_print=True):
@@ -149,6 +167,7 @@ def imputate_missing_values(dataset_name, dataset, the_train_statistics, n_rows_
         print(f"# The number of missing values in columns in {dataset_name}:\n{missing_values}\n")
     return dataset
 
+
 @print_function_name
 def one_hot_encode_categoricals(the_df, categorical_features=None, drop_one=True, categories_to_use_from_train=None):
     """
@@ -177,6 +196,7 @@ def one_hot_encode_categoricals(the_df, categorical_features=None, drop_one=True
     the_df = the_df.drop(columns=categorical_features)
     return the_df, one_hot_encodings_categories
 
+
 @print_function_name
 def add_new_features_statistics_to_train_statistics(the_train, the_train_statistics, new_features):
     """
@@ -193,6 +213,7 @@ def add_new_features_statistics_to_train_statistics(the_train, the_train_statist
     train_new_features_statistics = the_train[new_features].describe(include='all').T
     the_train_statistics = pd.concat([the_train_statistics, train_new_features_statistics], axis=0)
     return the_train_statistics
+
 
 @print_function_name
 def add_binary_property_to_train_statistics(the_train_statistics, the_property, features_list_with_property):
@@ -214,11 +235,22 @@ def add_binary_property_to_train_statistics(the_train_statistics, the_property, 
     the_train_statistics.loc[features_list_with_property, the_property] = 1
     return the_train_statistics
 
+
 @print_function_name
 def get_train_feautres_with_property(the_train_statistics, the_property):
-    "Extract list of features with property from train_statistics"
-    the_features = the_train_statistics[the_train_statistics[the_property]==1].index.tolist()
+    """
+    Extracts a list of features from the train statistics DataFrame that have a specified property.
+
+    Parameters:
+    - the_train_statistics (pd.DataFrame): DataFrame containing training statistics.
+    - the_property (str): The property based on which to filter features.
+
+    Returns:
+    - list: List of feature names that have the specified property.
+    """
+    the_features = the_train_statistics[the_train_statistics[the_property] == 1].index.tolist()
     return the_features
+
 
 @print_function_name
 def add_kurtosis_skew_statistics(the_df, the_train_statistics):
@@ -234,14 +266,14 @@ def add_kurtosis_skew_statistics(the_df, the_train_statistics):
     """
     the_train_statistics['kurtosis'] = the_df.apply(kurtosis)
     the_train_statistics['skew'] = the_df.apply(skew)
-    the_train_statistics['is_many_outliers'] = (the_train_statistics['kurtosis']>=3)*1
-    the_train_statistics['is_right_skew'] = (the_train_statistics['skew']>0)*1
+    the_train_statistics['is_many_outliers'] = (the_train_statistics['kurtosis'] >= 3) * 1
+    the_train_statistics['is_right_skew'] = (the_train_statistics['skew'] > 0) * 1
     return the_train_statistics
 
 
-
 @print_function_name
-def add_outlier_indicator(the_df: pd.DataFrame, the_feature: pd.Series, the_train_statistics: pd.DataFrame, outlier_col_suffix='is_outlier', is_train=False) -> pd.DataFrame:
+def add_outlier_indicator(the_df: pd.DataFrame, the_feature: pd.Series, the_train_statistics: pd.DataFrame,
+                          outlier_col_suffix='is_outlier', is_train=False) -> pd.DataFrame:
     """
     Add an outlier indicator column for a specific feature in the DataFrame.
     Outliers are defined as points distant more than 3 std from the mean.
@@ -264,21 +296,23 @@ def add_outlier_indicator(the_df: pd.DataFrame, the_feature: pd.Series, the_trai
     X = the_df[the_feature]
     mu = the_train_statistics.loc[the_feature, 'mean']
     sigma = the_train_statistics.loc[the_feature, 'std']
-    obs_z_scores = (X - mu)/sigma
+    obs_z_scores = (X - mu) / sigma
     # Get all rows with outliers
     outliers = obs_z_scores.abs() > 3
     # Mark outliers
     if sum(outliers) > 0:
         the_df.loc[outliers, outlier_col] = 1
     else:
-        if is_train: # if train and no outliers, drop column. if val or test, keep zeros.
+        if is_train:  # if train and no outliers, drop column. if val or test, keep zeros.
             the_df = the_df.drop(columns=outlier_col)
 
     return the_df, outlier_col
 
 
 @print_function_name
-def add_outlier_indicators_on_features(the_df: pd.DataFrame, the_train_statistics: pd.DataFrame, X_train_numeric_features: List = None, outlier_col_suffix='is_outlier') -> pd.DataFrame:
+def add_outlier_indicators_on_features(the_df: pd.DataFrame, the_train_statistics: pd.DataFrame,
+                                       X_train_numeric_features: List = None,
+                                       outlier_col_suffix='is_outlier') -> pd.DataFrame:
     """
     Add outlier indicator columns for multiple features in the DataFrame.
 
@@ -297,69 +331,130 @@ def add_outlier_indicators_on_features(the_df: pd.DataFrame, the_train_statistic
         categories = get_train_feautres_with_property(the_train_statistics, 'is_category')
         X_train_numeric_features = [col for col in the_df.columns if not col in categories]
     else:
-        is_train = False # either validation or test
+        is_train = False  # either validation or test
     new_outlier_cols = []
     for feature in X_train_numeric_features:
-        the_df, new_outlier_col = add_outlier_indicator(the_df, feature, the_train_statistics, outlier_col_suffix=outlier_col_suffix, is_train=is_train)
+        the_df, new_outlier_col = add_outlier_indicator(the_df, feature, the_train_statistics,
+                                                        outlier_col_suffix=outlier_col_suffix, is_train=is_train)
         new_outlier_cols = new_outlier_cols + [new_outlier_col]
     return the_df, new_outlier_cols
 
 
 @print_function_name
 def get_train_features_with_suffix(the_train_statistics, remove_suffix=True, the_suffix='is_outlier'):
+    """
+    Extracts a list of features from the train statistics DataFrame that have a specified suffix.
+
+    Parameters:
+    - the_train_statistics (pd.DataFrame): DataFrame containing training statistics.
+    - remove_suffix (bool, optional): If True, removes the suffix from the feature names. Defaults to True.
+    - the_suffix (str, optional): The suffix to filter features. Defaults to 'is_outlier'.
+
+    Returns:
+    - list: List of feature names with the specified suffix, optionally without the suffix.
+    """
     the_train_statistics_features = the_train_statistics.index.to_list()
     feautres_with_suffix = [feature for feature in the_train_statistics_features if feature.endswith(the_suffix)]
     if remove_suffix:
-        feautres_with_suffix = [feature.split("_"+the_suffix)[0] for feature in feautres_with_suffix]
+        feautres_with_suffix = [feature.split("_" + the_suffix)[0] for feature in feautres_with_suffix]
     return feautres_with_suffix
+
 
 @print_function_name
 def add_winsorization_values_to_train_statistics(the_X_train, the_train_statistics, percentiles=None):
-    '''Add percentile data to train_statistics, to later be used for winsorization'''
+    """
+    Add winsorization percentile values to the training statistics for outlier handling.
+
+    Parameters:
+    - the_X_train (pd.DataFrame): The training dataset.
+    - the_train_statistics (pd.DataFrame): Training statistics for reference.
+    - percentiles (list): List of percentiles to be used for winsorization. Defaults to [.05, .95].
+
+    Returns:
+    - pd.DataFrame: Updated training statistics with winsorization values.
+    """
     if percentiles is None:
         percentiles = [.05, .95]
-    winsorization_values = the_X_train.describe(include='all', percentiles=[.05,.95]).T
-    percentile_col_names = [str(col).split(".")[1].replace("0","")+"%" for col in percentiles]
+    winsorization_values = the_X_train.describe(include='all', percentiles=[.05, .95]).T
+    percentile_col_names = [str(col).split(".")[1].replace("0", "") + "%" for col in percentiles]
     the_train_statistics = the_train_statistics.join(winsorization_values[percentile_col_names], how='left')
     return the_train_statistics
+
+
 @print_function_name
-def winsorize_outliers(the_df, the_train_statistics, percentiles=[.05,.95], outlier_col_suffix = 'is_outlier'):
+def winsorize_outliers(the_df, the_train_statistics, percentiles=None, outlier_col_suffix='is_outlier'):
+    """
+    Apply winsorization to handle outliers in the DataFrame based on training statistics.
+
+    Parameters:
+    - the_df (pd.DataFrame): DataFrame containing the data.
+    - the_train_statistics (pd.DataFrame): Training statistics with winsorization values.
+    - percentiles (list): List of percentiles used for winsorization. Defaults to [.05, .95].
+
+    Returns:
+    - pd.DataFrame: The DataFrame after applying winsorization to outliers.
+    """
     # extract original outlier call and is_outliers cols
-    remove_suffix=False
-    train_outlier_cols = get_train_features_with_suffix(the_train_statistics, the_suffix=outlier_col_suffix, remove_suffix=remove_suffix)
-    remove_suffix=True
-    train_orig_outlier_cols = get_train_features_with_suffix(the_train_statistics, the_suffix=outlier_col_suffix, remove_suffix=remove_suffix)
+    if percentiles is None:
+        percentiles = [.05, .95]
+    remove_suffix = False
+    train_outlier_cols = get_train_features_with_suffix(the_train_statistics, the_suffix=outlier_col_suffix,
+                                                        remove_suffix=remove_suffix)
+    remove_suffix = True
+    train_orig_outlier_cols = get_train_features_with_suffix(the_train_statistics, the_suffix=outlier_col_suffix,
+                                                             remove_suffix=remove_suffix)
     outlier_cols_mapper = dict(zip(train_orig_outlier_cols, train_outlier_cols))
     # extract winsorization values
-    percentile_col_names = [str(col).split(".")[1].replace("0","")+"%" for col in percentiles]
+    percentile_col_names = [str(col).split(".")[1].replace("0", "") + "%" for col in percentiles]
     winsorization_values = the_train_statistics.loc[train_orig_outlier_cols, percentile_col_names].T
     # replace min/max outliers with min_winzor/max_winzor
     for orig_col, is_outlier_col in outlier_cols_mapper.items():
         min_winzor = winsorization_values[orig_col].min()
         max_winzor = winsorization_values[orig_col].max()
-        outlier_rows = the_df[is_outlier_col]==1
-        min_outliers = the_df[orig_col]<=min_winzor
-        max_outliers = the_df[orig_col]>=max_winzor
-        the_df.loc[(outlier_rows)&(min_outliers),orig_col] = min_winzor
-        the_df.loc[(outlier_rows)&(max_outliers),orig_col] = max_winzor
+        outlier_rows = the_df[is_outlier_col] == 1
+        min_outliers = the_df[orig_col] <= min_winzor
+        max_outliers = the_df[orig_col] >= max_winzor
+        the_df.loc[(outlier_rows) & (min_outliers), orig_col] = min_winzor
+        the_df.loc[(outlier_rows) & (max_outliers), orig_col] = max_winzor
 
     return the_df
 
 
 @print_function_name
 def add_polynomial_features(the_df, features_to_add=None, suffix='_squared'):
-    'For each feature in features_to_quare, add the_df the power of 2 of that feature'
+    """
+    Add polynomial features to the DataFrame.
+
+    Parameters:
+    - the_df (pd.DataFrame): DataFrame to be processed.
+    - features_to_add (list): List of feature names to apply polynomial transformation. Defaults to None.
+    - suffix (str): Suffix to be added to the new polynomial feature names. Defaults to '_squared'.
+
+    Returns:
+    - tuple: Modified DataFrame and a list of new polynomial feature names.
+    """
     if features_to_add is None:
-        features_to_add = ['alcohol','density']
+        features_to_add = ['alcohol', 'density']
     new_features_list = []
     for feature in features_to_add:
         new_feature = feature + suffix
         the_df[new_feature] = the_df[feature] ** 2
         new_features_list = new_features_list + [new_feature]
     return the_df, new_features_list
+
+
 @print_function_name
-def add_combination_features(the_df, features_to_add=None):
-    'For each feature in features_to_add, add the_df the result of the formula of that feature'
+def add_combination_features_wine_dataset(the_df, features_to_add=None):
+    """
+    Add combination features to the DataFrame based on specified formulas or operations of wine dataset features.
+
+    Parameters:
+    - the_df (pd.DataFrame): DataFrame to be processed.
+    - features_to_add (list): List of feature combinations to be added. Defaults to None.
+
+    Returns:
+    - tuple: Modified DataFrame and a list of new combination feature names.
+    """
     if features_to_add is None:
         features_to_add = ['total acidity', 'combined sulfur dioxide', 'mso2']
     new_features_list = features_to_add
@@ -369,46 +464,80 @@ def add_combination_features(the_df, features_to_add=None):
         if feature == 'combined sulfur dioxide':
             the_df[feature] = the_df['total sulfur dioxide'] - the_df['free sulfur dioxide']
         if feature == 'mso2':
-            the_df[feature] = (1+10**(the_df['pH']-1.81))
+            the_df[feature] = (1 + 10 ** (the_df['pH'] - 1.81))
     return the_df, new_features_list
+
+
 @print_function_name
 def add_interaction_features(the_df, features_tuples_list_to_add=None):
-    'For each pair of features in features_tuples_list_to_add, add the_df the multiplication of the features'
+    """
+    Add interaction features to the DataFrame by multiplying pairs of existing features.
+
+    Parameters:
+    - the_df (pd.DataFrame): DataFrame to be processed.
+    - features_tuples_list_to_add (list): List of tuples, each containing a pair of features for interaction. Defaults to None.
+
+    Returns:
+    - tuple: Modified DataFrame and a list of new interaction feature names.
+    """
     if features_tuples_list_to_add is None:
-        features_tuples_list_to_add = [ ('total sulfur dioxide', 'alcohol'),
-                                        ('chlorides','volatile acidity'),
-                                        ('density','citric acid')
-                                        ]
+        features_tuples_list_to_add = [('total sulfur dioxide', 'alcohol'),
+                                       ('chlorides', 'volatile acidity'),
+                                       ('density', 'citric acid')
+                                       ]
     new_features_list = []
-    for feature1, feature2  in features_tuples_list_to_add:
+    for feature1, feature2 in features_tuples_list_to_add:
         new_feature = feature1 + "_X_" + feature2
         the_df[new_feature] = the_df[feature1] * the_df[feature2]
         new_features_list = new_features_list + [new_feature]
     return the_df, new_features_list
+
+
 @print_function_name
 def add_ratio_features(the_df, features_tuples_list_to_add=None):
-    'For each pair of features in features_tuples_list_to_add, add the_df the ration of the features'
+    """
+    Add ratio features to the DataFrame by dividing pairs of existing features.
+
+    Parameters:
+    - the_df (pd.DataFrame): DataFrame to be processed.
+    - features_tuples_list_to_add (list): List of tuples, each containing a pair of features for ratio calculation. Defaults to None.
+
+    Returns:
+    - tuple: Modified DataFrame and a list of new ratio feature names.
+    """
     if features_tuples_list_to_add is None:
-        features_tuples_list_to_add = [ ('total acidity', 'free sulfur dioxide'),
-                                        ('free sulfur dioxide','total sulfur dioxide'),
-                                        ('total acidity','pH'),
-                                        ('citric acid','fixed acidity'),
-                                        ('alcohol','density'),
-                                        ('residual sugar','chlorides'),
-                                        ]
+        features_tuples_list_to_add = [('total acidity', 'free sulfur dioxide'),
+                                       ('free sulfur dioxide', 'total sulfur dioxide'),
+                                       ('total acidity', 'pH'),
+                                       ('citric acid', 'fixed acidity'),
+                                       ('alcohol', 'density'),
+                                       ('residual sugar', 'chlorides'),
+                                       ]
     new_features_list = []
-    for feature1, feature2  in features_tuples_list_to_add:
+    for feature1, feature2 in features_tuples_list_to_add:
         new_feature = feature1 + "_/_" + feature2
         the_df[new_feature] = the_df[feature1] / the_df[feature2]
         new_features_list = new_features_list + [new_feature]
     return the_df, new_features_list
 
+
 @print_function_name
 def engineer_new_features(the_df, add_functions_list=None, features_to_add_list=None):
-    'For each adding function and features to add, apply the function on the_df'
+    """
+    Engineer new features by applying a series of transformation functions to the DataFrame.
+
+    Parameters:
+    - the_df (pd.DataFrame): DataFrame to be processed.
+    - add_functions_list (list): List of functions to apply for feature engineering. Defaults to None, which means:
+    add_polynomial_features, add_combination_features_wine_dataset, add_interaction_features, add_ratio_features.
+    - features_to_add_list (list): List of features to be added by each function. Defaults to None.
+
+    Returns:
+    - tuple: Modified DataFrame and a list of all new engineered feature names.
+    """
     if add_functions_list is None:
         add_functions_list = [add_polynomial_features,
-                              add_combination_features,
+                              add_combination_features_wine_dataset,
                               add_interaction_features,
                               add_ratio_features]
     if features_to_add_list is None:
@@ -423,87 +552,138 @@ def engineer_new_features(the_df, add_functions_list=None, features_to_add_list=
     return the_df, new_features_list
 
 
-
 @print_function_name
 def get_multicollinear_features(features_list, df_multicollinear_corr, add_print=False):
-    """using a correlatin matrix df_multicollinear_corr and a list of features to test,
-    return a list of highly correlated features (compared to the list of features to test)"""
+    """
+    Identify multicollinear features from a given list based on a correlation matrix.
+
+    Parameters:
+    - features_list (list): List of feature names to check for multicollinearity.
+    - df_multicollinear_corr (pd.DataFrame): DataFrame containing the correlation matrix.
+    - add_print (bool): Flag to enable printing of results. Defaults to False.
+
+    Returns:
+    - list: List of multicollinear features.
+    """
     multicollinear_feautres = {}
     for feature in features_list:
         feature_val_counts = df_multicollinear_corr[feature].value_counts()
-        if len(feature_val_counts)>0:
+        if len(feature_val_counts) > 0:
             features_high_corr = df_multicollinear_corr[feature].dropna()
             if add_print:
                 print(f"\n{features_high_corr}")
             multicollinear_feautres[feature] = features_high_corr.index.tolist()
-    engineered_correlated_feautures = pd.DataFrame.from_dict(multicollinear_feautres, orient='index').reset_index().drop(columns='index').stack().drop_duplicates().values
+    engineered_correlated_feautures = pd.DataFrame.from_dict(multicollinear_feautres,
+                                                             orient='index').reset_index().drop(
+        columns='index').stack().drop_duplicates().values
     return engineered_correlated_feautures
 
+
 @print_function_name
-def drop_high_correlation_features(the_df, the_train_statistics, method='pearson', high_corrleation_threshold=0.9, add_print=False):
+def drop_high_correlation_features(the_df, the_train_statistics, method='pearson', high_correlation_threshold=0.9,
+                                   add_print=False):
+    """
+    Drop features from the DataFrame that have high correlation with other features.
+
+    Parameters:
+    - the_df (pd.DataFrame): DataFrame to be processed.
+    - the_train_statistics (pd.DataFrame): Training statistics for reference.
+    - method (str): Method for correlation calculation (e.g., 'pearson'). Defaults to 'pearson'.
+    - high_corrleation_threshold (float): Threshold for considering a feature as highly correlated. Defaults to 0.9.
+    - add_print (bool): Flag to enable printing of results. Defaults to False.
+
+    Returns:
+    - tuple: Modified DataFrame and a list of dropped feature names due to high correlation.
+    """
     if add_print:
-        print(f"\n# Each feature's high pearson correlations (at least {high_corrleation_threshold}):")
-    df_corr = the_df.corr(method='pearson')
+        print(f"\n# Each feature's high pearson correlations (at least {high_correlation_threshold}):")
+    df_corr = the_df.corr(method=method)
     # Get all high correlations features' sets
-    df_corr = df_corr[(df_corr.abs()>=high_corrleation_threshold)&(df_corr.abs()!=1)].dropna(how='all')
+    df_corr = df_corr[(df_corr.abs() >= high_correlation_threshold) & (df_corr.abs() != 1)].dropna(how='all')
     # get engineered highly correlated features
     orig_features = the_train_statistics[the_train_statistics['is_engineered'] == 0].index
     orig_features = [col for col in orig_features if col in df_corr]
     engineered_correlated_feautures = get_multicollinear_features(orig_features, df_corr, add_print=add_print)
     if add_print:
-        print(f"\nThere are {len(engineered_correlated_feautures)} high correlated engineered feautres (>={high_corrleation_threshold}):\n{engineered_correlated_feautures}")
+        print(
+            f"\nThere are {len(engineered_correlated_feautures)} high correlated engineered feautres (>={high_correlation_threshold}):\n{engineered_correlated_feautures}")
     # drop engineered highly correlated features
     the_df = the_df.drop(columns=engineered_correlated_feautures)
     if add_print:
-        print(f"After dropping highly correlated engineered features (>={high_corrleation_threshold}, there are {len(the_df.columns)} features in dataset")
+        print(
+            f"After dropping highly correlated engineered features (>={high_correlation_threshold}, there are {len(the_df.columns)} features in dataset")
     all_correlated_dropped_features = engineered_correlated_feautures
     # get remaining highly correlated features
     remaining_features = the_train_statistics[the_train_statistics['is_engineered'] == 1].index
     remaining_features = [col for col in remaining_features if col in df_corr if col in the_df]
     remaining_correlated_feautures = get_multicollinear_features(remaining_features, df_corr, add_print=add_print)
     if add_print:
-        print(f"There are {len(remaining_correlated_feautures)} high correlated remaining feautres (>={high_corrleation_threshold}):\n{remaining_correlated_feautures}")
-    if len(remaining_correlated_feautures)>0:
+        print(
+            f"There are {len(remaining_correlated_feautures)} high correlated remaining feautres (>={high_correlation_threshold}):\n{remaining_correlated_feautures}")
+    if len(remaining_correlated_feautures) > 0:
         # drop remaining highly correlated features
         the_df = the_df.drop(columns=remaining_correlated_feautures)
         if add_print:
-            print(f"After dropping highly correlated remaining features (>={high_corrleation_threshold}, there are {len(the_df.columns)} features in dataset")
+            print(
+                f"After dropping highly correlated remaining features (>={high_correlation_threshold}, there are {len(the_df.columns)} features in dataset")
         all_correlated_dropped_features = all_correlated_dropped_features + remaining_correlated_feautures
     return the_df, all_correlated_dropped_features
 
+
 @print_function_name
 def standardize_df_using_train_statistics(the_df, the_train_statistics, add_print=False):
+    """
+    Standardize a DataFrame using mean and standard deviation from training statistics.
+
+    Parameters:
+    - the_df (pd.DataFrame): DataFrame to be standardized.
+    - the_train_statistics (pd.DataFrame): Training statistics with mean and std values.
+    - add_print (bool): If True, prints the standardized features' means and standard deviations. Defaults to False.
+
+    Returns:
+    - pd.DataFrame: Standardized DataFrame.
+    """
     for feature in the_df:
-        mu = the_train_statistics.loc[the_train_statistics.index==feature, 'mean'][0]
-        sigma = the_train_statistics.loc[the_train_statistics.index==feature, 'std'][0]
+        mu = the_train_statistics.loc[the_train_statistics.index == feature, 'mean'][0]
+        sigma = the_train_statistics.loc[the_train_statistics.index == feature, 'std'][0]
         the_df[feature] = (the_df[feature] - mu) / sigma
     if add_print:
         print("\n # The standardized features means and standard deviations:\n")
-        print(the_df.agg(['mean','std']).round(3))
+        print(the_df.agg(['mean', 'std']).round(3))
     return the_df
 
 
 @print_function_name
 def upsample_target_minority(the_df, the_train_statistics, random_state=42):
-    """Upsample target minority so that the target classes will be balacned, return feature and target seperately"""
+    """
+    Upsample the minority class in the target feature to balance the dataset.
+
+    Parameters:
+    - the_df (pd.DataFrame): DataFrame containing features and target.
+    - the_train_statistics (pd.DataFrame): Training statistics for reference.
+    - random_state (int): Seed for random number generator. Defaults to 42.
+
+    Returns:
+    - tuple: Feature DataFrame and target Series after upsampling.
+    """
     # Extract target name from train_statistics
-    target = the_train_statistics[the_train_statistics['is_target']==1].index[0]
+    target = the_train_statistics[the_train_statistics['is_target'] == 1].index[0]
     # get the number of rows of majority class and the classes values
-    target_mean = the_train_statistics.loc[the_train_statistics.index==target, 'mean'][0]
-    if target_mean>=0.5:
+    target_mean = the_train_statistics.loc[the_train_statistics.index == target, 'mean'][0]
+    if target_mean >= 0.5:
         majority_pct = target_mean
         minority_class = 0
         majority_class = 1
     else:
-        majority_pct =  1 - target_mean
+        majority_pct = 1 - target_mean
         minority_class = 1
         majority_class = 0
 
     df_size = len(the_df)
-    majority_N_rows = int(np.floor(majority_pct*df_size))
+    majority_N_rows = int(np.floor(majority_pct * df_size))
     # Resample the minorty class (with replacemnt) to the number of rows in majority class
-    the_df_minorty = the_df[the_df[target]==minority_class]
-    the_df_majority = the_df[the_df[target]==majority_class]
+    the_df_minorty = the_df[the_df[target] == minority_class]
+    the_df_majority = the_df[the_df[target] == majority_class]
     the_df_minorty = the_df_minorty.sample(majority_N_rows, random_state=random_state, replace=True)
     # Concat the rows back together, and shuffle the df
     the_df = pd.concat([the_df_minorty, the_df_majority], axis=0)
@@ -512,8 +692,21 @@ def upsample_target_minority(the_df, the_train_statistics, random_state=42):
     the_target_df = the_df[target]
     the_target_features = the_df.drop(columns=target)
     return the_target_features, the_target_df
+
+
 @print_function_name
 def add_target_to_train_statistics(the_train_target, the_train_statistics, target='quality'):
+    """
+    Add target feature statistics to the training statistics DataFrame.
+
+    Parameters:
+    - the_train_target (pd.Series): Series containing the target data.
+    - the_train_statistics (pd.DataFrame): Training statistics DataFrame.
+    - target (str): Name of the target feature. Defaults to 'quality'.
+
+    Returns:
+    - pd.DataFrame: Updated training statistics including target feature statistics.
+    """
     # get target statistics
     target_statistics = the_train_target.describe(include='all').T
     # add target statistics to train statistics
@@ -521,44 +714,114 @@ def add_target_to_train_statistics(the_train_target, the_train_statistics, targe
     # add is_target property
     the_train_statistics = add_binary_property_to_train_statistics(the_train_statistics, 'is_target', target)
     # move is_target property to first column
-    the_train_statistics = pd.concat([the_train_statistics['is_target'], the_train_statistics.drop(columns=['is_target'])], axis=1)
+    the_train_statistics = pd.concat(
+        [the_train_statistics['is_target'], the_train_statistics.drop(columns=['is_target'])], axis=1)
     return the_train_statistics
+
 
 @print_function_name
 def replace_columns_spaces_with_underscores(the_df):
-    the_df.columns = the_df.columns.str.replace("_/_","/")
-    the_df.columns = the_df.columns.str.replace(" ","_")
+    """
+    Replace spaces in DataFrame column names with underscores.
+
+    Parameters:
+    - the_df (pd.DataFrame): DataFrame whose column names need modification.
+
+    Returns:
+    - pd.DataFrame: DataFrame with updated column names.
+    """
+    the_df.columns = the_df.columns.str.replace("_/_", "/")
+    the_df.columns = the_df.columns.str.replace(" ", "_")
     return the_df
+
+
 @print_function_name
 def drop_features(the_df, features_to_drop, errors='ignore'):
+    """
+    Drop specified features from a DataFrame.
+
+    Parameters:
+    - the_df (pd.DataFrame): DataFrame from which features are to be dropped.
+    - features_to_drop (list): List of feature names to drop.
+    - errors (str): Error handling strategy, 'ignore' or 'raise'. Defaults to 'ignore'.
+
+    Returns:
+    - pd.DataFrame: DataFrame after dropping specified features.
+    """
     the_df = the_df.drop(columns=features_to_drop, errors=errors)
     return the_df
+
+
 @print_function_name
 def drop_features_with_train_statistics_property(the_df, the_train_statistics, property_list, errors='ignore'):
-    ## drop categorical already-encoded features, and highly correlated features:
+    """
+    Drop features from a DataFrame based on a specific property in the training statistics.
+
+    Parameters:
+    - the_df (pd.DataFrame): DataFrame to be processed.
+    - the_train_statistics (pd.DataFrame): Training statistics containing property information.
+    - property_list (list): List of properties used to determine which features to drop.
+    - errors (str): Error handling strategy, 'ignore' or 'raise'. Defaults to 'ignore'.
+
+    Returns:
+    - pd.DataFrame: DataFrame after dropping features based on the specified property.
+    """
     for type_of_features_to_drop in property_list:
         features_to_drop = get_train_feautres_with_property(the_train_statistics, type_of_features_to_drop)
         the_df = drop_features(the_df, features_to_drop=features_to_drop, errors=errors)
     return the_df
 
 
-
 @print_function_name
 def move_cols_to_first(the_df, cols):
+    """
+    Move specified columns to the beginning of a DataFrame.
+
+    Parameters:
+    - the_df (pd.DataFrame): The DataFrame to be modified.
+    - cols (list): List of column names to move to the beginning.
+
+    Returns:
+    - pd.DataFrame: The DataFrame with specified columns moved to the beginning.
+    """
     other_cols = the_df.columns[~the_df.columns.isin(cols)]
-    the_df = pd.concat([the_df[cols],the_df[other_cols]],axis=1)
+    the_df = pd.concat([the_df[cols], the_df[other_cols]], axis=1)
     return the_df
-
-
 
 
 @print_function_name
 def reorder_feature_importance_by_abs_values(the_feature_importance, importance_col='importance'):
-    feature_importance_index = the_feature_importance.copy(deep=True).abs().sort_values(by=importance_col, ascending=False).index
+    """
+    Reorder feature importance by absolute values.
+
+    Parameters:
+    - the_feature_importance (pd.DataFrame): DataFrame containing features and their importance.
+    - importance_col (str): Column name indicating the importance of features. Defaults to 'importance'.
+
+    Returns:
+    - pd.DataFrame: DataFrame with features reordered based on their importance in absolute terms.
+    """
+    feature_importance_index = the_feature_importance.copy(deep=True).abs().sort_values(by=importance_col,
+                                                                                        ascending=False).index
     the_feature_importance = the_feature_importance.loc[feature_importance_index]
     return the_feature_importance
+
+
 @print_function_name
 def get_permutation_importance(the_model, the_X_train, the_X_val, the_y_val, random_state=0):
+    """
+    Calculate permutation importance for features in a trained model.
+
+    Parameters:
+    - the_model: Trained machine learning model.
+    - the_X_train (pd.DataFrame): Training feature set.
+    - the_X_val (pd.DataFrame): Validation feature set.
+    - the_y_val (pd.Series): Validation target.
+    - random_state (int): Seed for random number generator. Defaults to 0.
+
+    Returns:
+    - pd.DataFrame: DataFrame containing features and their permutation importance.
+    """
     imps = permutation_importance(the_model, the_X_val.values, the_y_val.values, random_state=random_state)
     count_vect = CountVectorizer()
     X_train_counts = count_vect.fit_transform(the_X_train)
@@ -566,119 +829,61 @@ def get_permutation_importance(the_model, the_X_train, the_X_val, the_y_val, ran
     the_feature_importance = zip(feature_names, imps.importances_mean)
     the_feature_importance = sorted(the_feature_importance, key=lambda x: x[1], reverse=True)
     the_feature_importance = pd.DataFrame(the_feature_importance)
-    the_feature_importance.columns = ['feature','importance']
+    the_feature_importance.columns = ['feature', 'importance']
     the_feature_importance = the_feature_importance.set_index('feature')
-    the_feature_importance = reorder_feature_importance_by_abs_values(the_feature_importance, importance_col='importance')
+    the_feature_importance = reorder_feature_importance_by_abs_values(the_feature_importance,
+                                                                      importance_col='importance')
     return the_feature_importance
-@print_function_name
-def plot_feature_importance(the_feature_importance, show_sign_color=True, show_only_important=True, model_name=""):
-    the_feature_importance = the_feature_importance.copy(deep=True)
-    # Color-blind friendly colors - #88CCEE” (light blue), #CC79A7” (reddish purple)
-    if show_sign_color:
-        the_feature_importance['color'] = np.where(the_feature_importance['importance'] >= 0, '#88CCEE', '#CC79A7')
-        the_feature_importance['importance'] = the_feature_importance['importance'].abs()
-    the_feature_importance = the_feature_importance.sort_values(by='importance', ascending=True)
-    if show_only_important:
-        the_feature_importance = the_feature_importance[the_feature_importance['importance']>0]
-    if show_sign_color:
-        the_feature_importance['importance'].plot.barh(color=the_feature_importance['color'].values, title=f'{model_name} Feature importances: blue=positive, red=negative')
-    else:
-        the_feature_importance['importance'].plot.barh(title=f'{model_name} Feature importances')
-    plt.tight_layout()
-
-
-@print_function_name
-def plot_roc_curves(the_y_train, the_y_prob_train, the_y_val, the_y_prob_val, model_name='basline'):
-    # Compute the FPR and TPR for different thresholds for both train and validation sets
-    fpr_train, tpr_train, thresholds_train = roc_curve(the_y_train, the_y_prob_train)
-    fpr_val, tpr_val, thresholds_val = roc_curve(the_y_val, the_y_prob_val)
-
-    # Compute the AUC score for both train and validation sets
-    auc_train = roc_auc_score(the_y_train, the_y_prob_train)
-    auc_val = roc_auc_score(the_y_val, the_y_prob_val)
-
-    # Create a figure and an axis object
-    fig, ax = plt.subplots()
-
-    # Plot the ROC curve for both train and validation sets using RocCurveDisplay
-    RocCurveDisplay(fpr=fpr_train, tpr=tpr_train, roc_auc=auc_train, estimator_name='Train').plot(ax=ax)
-    RocCurveDisplay(fpr=fpr_val, tpr=tpr_val, roc_auc=auc_val, estimator_name='Validation').plot(ax=ax)
-
-    ax.set_title(f"{model_name} ROC curve".capitalize())
-    # Plot the y=x dotted line
-    plt.plot([0, 1], [0, 1], 'r--', label='Random classifier')
-    plt.legend(loc='lower right')
-    # Show the plot
-    plt.savefig("output/img.png")
-
-
-@print_function_name
-def get_model_metrics(the_y_val, the_y_pred, the_y_prob_val, the_feature_importance, model, model_params, model_name='baseline', existing_model_metrics=None, export_to_csv=False):
-    # if not existing_model_metrics, import existing metrics from folder if it exists, else create a new dataframe.
-    # if existing_model_metrics - use the existing model metrics, in the end we'll append current results to existing.
-    if existing_model_metrics is None:
-        if 'model_metrics.csv' in os.listdir():
-            the_model_metrics = pd.read_csv('model_metrics.csv', index_col=0)
-        else:
-            the_model_metrics = pd.DataFrame()
-    else:
-        the_model_metrics = existing_model_metrics.copy(deep=True)
-    # create confusion matrix
-    conf_matrix = pd.DataFrame(confusion_matrix(the_y_val, the_y_pred))
-    conf_matrix = conf_matrix.stack().to_frame().T
-    conf_matrix.columns = ['TN','FP','FN','TP']
-    # create classification report
-    class_report = pd.DataFrame(classification_report(the_y_val, the_y_pred, output_dict=True)).drop(columns=['macro avg', 'weighted avg'])
-    class_report = pd.concat([class_report[class_report.index=='support'], class_report[class_report.index!='support']], axis=0)
-    class_report = class_report.stack().to_frame().T
-    class_report = pd.concat([conf_matrix, class_report], axis=1)
-    class_report[[('support', '1'), ('support', '0')]] = class_report[[('support', '1'), ('support', '0')]].astype(int)
-    ## create distribution 1, lift 1, lift 0
-    class_report[('distribution', '1')] = class_report[('support', '1')] / (class_report[('support', '0')] + class_report[('support', '1')])
-    class_report[('lift', '1')] = class_report[('precision', '1')] / class_report[('distribution', '1')]
-    class_report[('lift', '0')] = class_report[('precision', '0')] / (1-class_report[('distribution', '1')])
-    class_report = class_report.rename(columns={('support','accuracy'):'accuracy'}).drop(columns=[('f1-score','accuracy'),('recall','accuracy'), ('precision','accuracy')])
-    ## add AUC
-    class_report['AUC'] = roc_auc_score(the_y_val, the_y_prob_val)
-    ## reorder columns
-    class_report = move_cols_to_first(class_report, [('support', '1'), ('support', '0'), 'TP', 'FP', 'TN', 'FN', 'accuracy', ('distribution', '1'), ('precision', '1'), ('lift', '1'), ('recall', '1'), ('f1-score', '1'), 'AUC', ('precision', '0'), ('lift', '0'), ('recall','0')])
-    # add feature importance
-    the_feature_importance = the_feature_importance if isinstance(model_name, dict) else the_feature_importance.round(3).to_dict()['importance']
-    class_report['feature_importance'] = [the_feature_importance]
-    # add modeling metdata
-    class_report['model'] = [model]
-    class_report['hyper_parameters'] = [model_params]
-    class_report['train_timestamp'] = pd.to_datetime(datetime.now().strftime("%d-%m-%Y %H:%M:%S"), dayfirst=True)
-    class_report = move_cols_to_first(class_report, ['train_timestamp','model', 'hyper_parameters'])
-    # set model name
-    model_name = model_name if isinstance(model_name, list) else [model_name]
-    class_report.index = model_name
-    # append current results to either new or existing dataframe
-    if len(the_model_metrics)>0:
-        class_report.columns = the_model_metrics.columns
-    the_model_metrics = pd.concat([the_model_metrics, class_report], axis=0)
-    if export_to_csv:
-        the_model_metrics.to_csv('model_metrics.csv')
-    return the_model_metrics
 
 
 @print_function_name
 # Fix plot_feature_importance, so it'll receive plot axis as input, for plotting several graphs one above the other
 def plot_feature_importance(the_feature_importance, ax, show_sign_color=True, show_only_important=True, model_name=""):
+    """
+    Plot feature importance on the provided axis object.
+
+    Parameters:
+    - the_feature_importance (pd.DataFrame): DataFrame containing features and their importance.
+    - ax (matplotlib.axes.Axes): The axis object to plot on.
+    - show_sign_color (bool): If True, different colors will be used to indicate positive and negative importance. Defaults to True.
+    - show_only_important (bool): If True, only features with non-zero importance are plotted. Defaults to True.
+    - model_name (str): Name of the model for title. Defaults to an empty string.
+
+    Returns:
+    - None: The function plots the feature importance on the provided axis.
+    """
     the_feature_importance = the_feature_importance.copy(deep=True)
+    print("the_feature_importance", the_feature_importance)
     if show_sign_color:
         the_feature_importance['color'] = np.where(the_feature_importance['importance'] >= 0, '#88CCEE', '#CC79A7')
         the_feature_importance['importance'] = the_feature_importance['importance'].abs()
     the_feature_importance = the_feature_importance.sort_values(by='importance', ascending=True)
     if show_only_important:
-        the_feature_importance = the_feature_importance[the_feature_importance['importance']>0]
+        the_feature_importance = the_feature_importance[the_feature_importance['importance'] > 0]
     if show_sign_color:
-        the_feature_importance['importance'].plot.barh(color=the_feature_importance['color'].values, ax=ax, title=f'{model_name} Feature importances: blue=positive, red=negative')
+        the_feature_importance['importance'].plot.barh(color=the_feature_importance['color'].values, ax=ax,
+                                                       title=f'{model_name} Feature importances: blue=positive, red=negative')
     else:
         the_feature_importance['importance'].plot.barh(ax=ax, title=f'{model_name} Feature importances')
     plt.tight_layout()
+
+
 @print_function_name
 def plot_roc_curves(the_y_train, the_y_prob_train, the_y_val, the_y_prob_val, ax, model_name='basline'):
+    """
+    Plot ROC curves for training and validation sets.
+
+    Parameters:
+    - the_y_train (pd.Series): Actual target values for the training set.
+    - the_y_prob_train (np.array): Predicted probabilities for the training set.
+    - the_y_val (pd.Series): Actual target values for the validation set.
+    - the_y_prob_val (np.array): Predicted probabilities for the validation set.
+    - ax (matplotlib.axes.Axes): The axis object to plot on.
+    - model_name (str): Name of the model for title. Defaults to 'baseline'.
+
+    Returns:
+    - None: The function plots ROC curves on the provided axis.
+    """
     fpr_train, tpr_train, thresholds_train = roc_curve(the_y_train, the_y_prob_train)
     fpr_val, tpr_val, thresholds_val = roc_curve(the_y_val, the_y_prob_val)
     auc_train = roc_auc_score(the_y_train, the_y_prob_train)
@@ -691,57 +896,142 @@ def plot_roc_curves(the_y_train, the_y_prob_train, the_y_val, the_y_prob_val, ax
     plt.tight_layout()
 
 
+
 @print_function_name
-def train_evaluate_plot_report_sklearn_classification_model(the_model, the_X_train, the_y_train, the_X_val, the_y_val, the_model_name=None, export_metrics_to_csv=True, to_plot=True, plot_time='first', axs=None):
+def get_model_metrics(the_y_val, the_y_pred, the_y_prob_val, the_feature_importance, model, model_params,
+                      model_name='baseline', existing_model_metrics=None, export_to_csv=False):
     """
-    For a given model instantiation and train and validation datasets, train a model, plot feature importance and ROC curve, and import, export and return updated model metrics dataframe
-    :param the_model: Instantiation of a sklearn model
-    :param the_X_train: a DataFrame of the train features
-    :param the_y_train: a DataFrame of the train target
-    :param the_X_val: a DataFrame of the validation features
-    :param the_y_val: a DataFrame of the validation target
-    :param the_model_name: a string of the model name, will be used for plotting title and updating the model metrics dataframe
-    :param export_metrics_to_csv: export updated model metrics back to csv file
-    :param to_plot: a boolean for plotting feature importance and ROC curve
-    :return: the DataFrame model metrics, appended with the trained model results
+    Generate and retrieve model performance metrics, including confusion matrix, classification report, lift and AUC.
+
+    Parameters:
+    - the_y_val (pd.Series): Actual target values from the validation set.
+    - the_y_pred (np.array): Predicted target values from the validation set.
+    - the_y_prob_val (np.array): Predicted probabilities for the validation set.
+    - the_feature_importance (pd.DataFrame): DataFrame of feature importances.
+    - model: The trained model.
+    - model_params (dict): Parameters used in the model.
+    - model_name (str): Name of the model for identification. Defaults to 'baseline'.
+    - existing_model_metrics (pd.DataFrame): DataFrame of existing model metrics to append to. Defaults to None.
+    - export_to_csv (bool): Whether to export the metrics to a CSV file. Defaults to False.
+
+    Returns:
+    - pd.DataFrame: DataFrame containing the updated model metrics.
+    """
+    # if not existing_model_metrics, import existing metrics from folder if it exists, else create a new dataframe.
+    # if existing_model_metrics - use the existing model metrics, in the end we'll append current results to existing.
+    if existing_model_metrics is None:
+        if 'model_metrics.csv' in os.listdir():
+            the_model_metrics = pd.read_csv('model_metrics.csv', index_col=0)
+        else:
+            the_model_metrics = pd.DataFrame()
+    else:
+        the_model_metrics = existing_model_metrics.copy(deep=True)
+    # create confusion matrix
+    conf_matrix = pd.DataFrame(confusion_matrix(the_y_val, the_y_pred))
+    conf_matrix = conf_matrix.stack().to_frame().T
+    conf_matrix.columns = ['TN', 'FP', 'FN', 'TP']
+    # create classification report
+    class_report = pd.DataFrame(classification_report(the_y_val, the_y_pred, output_dict=True)).drop(
+        columns=['macro avg', 'weighted avg'])
+    class_report = pd.concat(
+        [class_report[class_report.index == 'support'], class_report[class_report.index != 'support']], axis=0)
+    class_report = class_report.stack().to_frame().T
+    class_report = pd.concat([conf_matrix, class_report], axis=1)
+    class_report[[('support', '1'), ('support', '0')]] = class_report[[('support', '1'), ('support', '0')]].astype(int)
+    ## create distribution 1, lift 1, lift 0
+    class_report[('distribution', '1')] = class_report[('support', '1')] / (
+                class_report[('support', '0')] + class_report[('support', '1')])
+    class_report[('lift', '1')] = class_report[('precision', '1')] / class_report[('distribution', '1')]
+    class_report[('lift', '0')] = class_report[('precision', '0')] / (1 - class_report[('distribution', '1')])
+    class_report = class_report.rename(columns={('support', 'accuracy'): 'accuracy'}).drop(
+        columns=[('f1-score', 'accuracy'), ('recall', 'accuracy'), ('precision', 'accuracy')])
+    ## add AUC
+    class_report['AUC'] = roc_auc_score(the_y_val, the_y_prob_val)
+    ## reorder columns
+    class_report = move_cols_to_first(class_report,
+                                      [('support', '1'), ('support', '0'), 'TP', 'FP', 'TN', 'FN', 'accuracy',
+                                       ('distribution', '1'), ('precision', '1'), ('lift', '1'), ('recall', '1'),
+                                       ('f1-score', '1'), 'AUC', ('precision', '0'), ('lift', '0'), ('recall', '0')])
+    # add feature importance
+    the_feature_importance = the_feature_importance if isinstance(model_name, dict) else \
+    the_feature_importance.round(3).to_dict()['importance']
+    class_report['feature_importance'] = [the_feature_importance]
+    # add modeling metdata
+    class_report['model'] = [model]
+    class_report['hyper_parameters'] = [model_params]
+    class_report['train_timestamp'] = pd.to_datetime(datetime.now().strftime("%d-%m-%Y %H:%M:%S"), dayfirst=True)
+    class_report = move_cols_to_first(class_report, ['train_timestamp', 'model', 'hyper_parameters'])
+    # set model name
+    model_name = model_name if isinstance(model_name, list) else [model_name]
+    class_report.index = model_name
+    # append current results to either new or existing dataframe
+    if len(the_model_metrics) > 0:
+        class_report.columns = the_model_metrics.columns
+    the_model_metrics = pd.concat([the_model_metrics, class_report], axis=0)
+    if export_to_csv:
+        the_model_metrics.to_csv('model_metrics.csv')
+    return the_model_metrics
+
+
+@print_function_name
+def train_evaluate_plot_report_sklearn_classification_model(the_model, the_X_train, the_y_train, the_X_val, the_y_val,
+                                                            the_model_name=None, export_metrics_to_csv=True,
+                                                            to_plot=True, plot_time='first', axs=None):
+    """
+    Train, evaluate, plot, and report metrics for a Scikit-learn classification model.
+
+    Parameters:
+    - the_model: Scikit-learn model to be trained.
+    - the_X_train (pd.DataFrame): Training data features.
+    - the_y_train (pd.Series): Training data target.
+    - the_X_val (pd.DataFrame): Validation data features.
+    - the_y_val (pd.Series): Validation data target.
+    - the_model_name (str): Name of the model. Used for plotting and reporting. Defaults to None.
+    - export_metrics_to_csv (bool): If True, export metrics to a CSV file. Defaults to True.
+    - to_plot (bool): If True, plot feature importance and ROC curves. Defaults to True.
+    - plot_time (str): When to plot ('first', 'second', or 'unique'). Defaults to 'first'.
+    - axs: Matplotlib axes array for plotting. Defaults to None.
+
+    Returns:
+    - The trained model metrics as a DataFrame, along with axes if plotting is enabled.
     """
     the_model = the_model.fit(the_X_train.values, the_y_train.values)
     y_pred = the_model.predict(the_X_val.values)
 
-    if hasattr(the_model, 'feature_importances_'): # Tree based algorithms
+    if hasattr(the_model, 'feature_importances_'):  # Tree based algorithms
         feature_importance = the_model.feature_importances_
         feature_importance = pd.DataFrame({'feature': the_X_train.columns, 'importance': feature_importance})
         feature_importance = feature_importance.set_index('feature')
-    elif hasattr(the_model, 'coef_'): # logistic regression coefficients
+    elif hasattr(the_model, 'coef_'):  # logistic regression coefficients
         coefficients = the_model.coef_[0]
         feature_importance = pd.DataFrame({'feature': the_X_train.columns, 'importance': coefficients})
         feature_importance = feature_importance.set_index('feature')
-    else: # permutation importance
+    else:  # permutation importance
         feature_importance = get_permutation_importance(the_model, the_X_train, the_X_val, the_y_val)
 
     if the_model_name is None:
-        the_model_name= str(the_model)
+        the_model_name = str(the_model)
     the_y_prob_train = the_model.predict_proba(the_X_train.values)[:, [1]]
     the_y_prob_val = the_model.predict_proba(the_X_val.values)[:, [1]]
 
-
     if to_plot:
-        if plot_time=='unique':
-            fig, axs = plt.subplots(2, 1, figsize=(8, 10)) # Adjust the size as necessary
+        if plot_time == 'unique':
+            fig, axs = plt.subplots(2, 1, figsize=(8, 10))  # Adjust the size as necessary
             first_axes = 0
             second_axes = 1
-        elif plot_time=='first':
-            fig, axs = plt.subplots(4, 1, figsize=(8, 20)) # Adjust the size as necessary
+        elif plot_time == 'first':
+            fig, axs = plt.subplots(4, 1, figsize=(8, 20))  # Adjust the size as necessary
             first_axes = 0
             second_axes = 1
-        elif plot_time=='second':
+        elif plot_time == 'second':
             first_axes = 2
             second_axes = 3
-        plot_feature_importance(feature_importance, axs[first_axes], show_sign_color=True, show_only_important=True, model_name=the_model_name)
-        plot_roc_curves(the_y_train, the_y_prob_train, the_y_val, the_y_prob_val, axs[second_axes], model_name=the_model_name)
+        plot_feature_importance(feature_importance, axs[first_axes], show_sign_color=True, show_only_important=True,
+                                model_name=the_model_name)
+        plot_roc_curves(the_y_train, the_y_prob_train, the_y_val, the_y_prob_val, axs[second_axes],
+                        model_name=the_model_name)
 
-
-    model_params=the_model.get_params()
+    model_params = the_model.get_params()
     the_model_metrics = get_model_metrics(the_y_val, y_pred, the_y_prob_val,
                                           feature_importance, model=the_model,
                                           model_params=model_params,
@@ -752,33 +1042,71 @@ def train_evaluate_plot_report_sklearn_classification_model(the_model, the_X_tra
 
 @print_function_name
 def get_important_features(the_feature_importance, importance_threshold=0.001):
-    the_important_features = the_feature_importance[the_feature_importance>importance_threshold].dropna()
+    """
+    Extract a list of important features based on a specified importance threshold.
+
+    Parameters:
+    - the_feature_importance (pd.DataFrame): DataFrame containing feature importances.
+    - importance_threshold (float): Threshold value to consider a feature as important. Defaults to 0.001.
+
+    Returns:
+    - list: List of important feature names.
+    """
+    the_important_features = the_feature_importance[the_feature_importance > importance_threshold].dropna()
     the_important_features = the_important_features.index.tolist()
     return the_important_features
+
+
 @print_function_name
 def retrain_on_entire_dataset(the_df_X, the_df_y, the_model, the_model_name='entire dataset (no validation)'):
+    """
+    Retrain a model on the entire dataset (without a validation set) and plot feature importances.
+
+    Parameters:
+    - the_df_X (pd.DataFrame): Feature set for the entire dataset.
+    - the_df_y (pd.Series): Target set for the entire dataset.
+    - the_model: Machine learning model to be retrained.
+    - the_model_name (str): Name of the model for plotting purposes. Defaults to 'entire dataset (no validation)'.
+
+    Returns:
+    - None: The function retrains the model and plots feature importances.
+    """
     the_model = the_model.fit(the_df_X.values, the_df_y.values)
 
-    if hasattr(the_model, 'feature_importances_'): # Tree based algorithms
+    if hasattr(the_model, 'feature_importances_'):  # Tree based algorithms
         feature_importance = the_model.feature_importances_
         feature_importance = pd.DataFrame({'feature': the_df_X.columns, 'importance': feature_importance})
         feature_importance = feature_importance.set_index('feature')
-    elif hasattr(the_model, 'coef_'): # logistic regression coefficients
+    elif hasattr(the_model, 'coef_'):  # logistic regression coefficients
         coefficients = the_model.coef_[0]
         feature_importance = pd.DataFrame({'feature': the_df_X.columns, 'importance': coefficients})
         feature_importance = feature_importance.set_index('feature')
-    else: # permutation importance
+    else:  # permutation importance
         feature_importance = get_permutation_importance(the_model, the_df_X, the_df_X, the_df_y)
 
-    fig, axs = plt.subplots(figsize=(8,6)) # Adjust the size as necessary
-    plot_feature_importance(feature_importance, axs, show_sign_color=True, show_only_important=True, model_name=the_model_name)
+    fig, axs = plt.subplots(figsize=(8, 6))  # Adjust the size as necessary
+    plot_feature_importance(feature_importance, axs, show_sign_color=True, show_only_important=True,
+                            model_name=the_model_name)
 
     return the_model
+
+
 @print_function_name
 def transform_target_to_series(the_df, target_col='quality'):
+    """
+    Transform and extract the target column from a DataFrame into a Series.
+
+    Parameters:
+    - the_df (pd.DataFrame): DataFrame containing the target column.
+    - target_col (str): Name of the target column. Defaults to 'quality'.
+
+    Returns:
+    - pd.Series: Series containing the target data.
+    """
     if type(the_df) == pd.DataFrame:
         the_df = the_df[target_col]
     return the_df
+
 
 @print_function_name
 def import_data(filename: str = "winequalityN.csv", data_dir: str = "data/raw/") -> pd.DataFrame:
@@ -823,7 +1151,6 @@ def main():
         print(e)
         # Handle the error appropriately (e.g., exit the script or log the error)
 
-
     target = 'quality'
 
     df = transform_numeric_target_feature_to_binary(df, target_col='quality', threshold=7)
@@ -840,10 +1167,10 @@ def main():
 
     # Show all columns (don't replace some with "...")
     pd.set_option('display.max_columns', None)
-    alpha = 0.01 # significance level
+    alpha = 0.01  # significance level
     dfs_dict_to_test = {'X_val': X_val, 'X_test': X_test}
     train_val_outlier_means_test = test_if_features_statistically_different(X_train, dfs_dict_to_test, alpha=alpha)
-    #print('\n# Test if train, validation and test sets means are statisically not different:\n', train_val_outlier_means_test)
+    # print('\n# Test if train, validation and test sets means are statisically not different:\n', train_val_outlier_means_test)
 
     # Missing Values imputation
     # Create a variable to hold all train statistics,
@@ -851,8 +1178,8 @@ def main():
     train_statistics = X_train.describe(include='all').T
     # Add a column to flag features with missing values
     len_X_train = len(X_train)
-    train_statistics['has_na'] = (train_statistics['count'] < len_X_train)*1
-    statisticis_to_show = train_statistics.loc[train_statistics['has_na']==True, ['mean','has_na']]
+    train_statistics['has_na'] = (train_statistics['count'] < len_X_train) * 1
+    statisticis_to_show = train_statistics.loc[train_statistics['has_na'] == True, ['mean', 'has_na']]
 
     # Create a function for missing values imputation, as we will imputate 3 times:
     # for train, for valiation and for test
@@ -863,102 +1190,117 @@ def main():
     X_test = imputate_missing_values('X_test', X_test, train_statistics, add_print=False)
 
     # Define parameters for the functions: cateorical features names, and if should one categoy be dropped for every feature
-    categorical_features=['type']
+    categorical_features = ['type']
     drop_one = True
     # Encode categoricals for train, get back the train categories
-    X_train, train_categories = one_hot_encode_categoricals(X_train, categorical_features=categorical_features, drop_one=drop_one)
+    X_train, train_categories = one_hot_encode_categoricals(X_train, categorical_features=categorical_features,
+                                                            drop_one=drop_one)
 
     # Add new train cateogories statistics to train_statistics
 
     # Add proprty 'is_categorical_to_drop' to original cateogorical features
-    train_statistics = add_binary_property_to_train_statistics(train_statistics, 'is_categorical_to_drop', categorical_features)
+    train_statistics = add_binary_property_to_train_statistics(train_statistics, 'is_categorical_to_drop',
+                                                               categorical_features)
     # Add proprty 'is_category' to newly created categories one-hot-encoding features
-    train_statistics = add_binary_property_to_train_statistics(train_statistics, 'is_category', train_categories)
     train_statistics = add_new_features_statistics_to_train_statistics(X_train, train_statistics, train_categories)
+    train_statistics = add_binary_property_to_train_statistics(train_statistics, 'is_category', train_categories)
+
 
     # Get category features and categories of train, from train_statistics
     categorical_features = get_train_feautres_with_property(train_statistics, 'is_categorical_to_drop')
     categories_to_use_from_train = get_train_feautres_with_property(train_statistics, 'is_category')
     # Create a partial function, pre-set with these parameters, to be run on both X_val and X_test
     from functools import partial
-    one_hot_encode_categoricals_fn = partial(one_hot_encode_categoricals, categorical_features=categorical_features, categories_to_use_from_train=categories_to_use_from_train)
+    one_hot_encode_categoricals_fn = partial(one_hot_encode_categoricals, categorical_features=categorical_features,
+                                             categories_to_use_from_train=categories_to_use_from_train)
     X_val, _ = one_hot_encode_categoricals_fn(X_val)
     X_test, _ = one_hot_encode_categoricals_fn(X_test)
     # add kurtosis and skew statistics
     train_statistics = add_kurtosis_skew_statistics(X_train, train_statistics)
     # Detect Outliers
     # Add outlier column indicator, having 1 for outlier rows
-    X_train_numeric_features = None # When none, assume train dataset and find all relevent columns
+    X_train_numeric_features = None  # When none, assume train dataset and find all relevent columns
     outlier_col_suffix = 'is_outlier'
-    X_train, train_outiler_cols = add_outlier_indicators_on_features(X_train, train_statistics, X_train_numeric_features=X_train_numeric_features, outlier_col_suffix=outlier_col_suffix)
+    X_train, train_outiler_cols = add_outlier_indicators_on_features(X_train, train_statistics,
+                                                                     X_train_numeric_features=X_train_numeric_features,
+                                                                     outlier_col_suffix=outlier_col_suffix)
 
     # Update outlier statistics to train_statistics
     train_statistics = add_new_features_statistics_to_train_statistics(X_train, train_statistics, train_outiler_cols)
-    #print("# Updated train_statistics: \n", train_statistics)
+    # print("# Updated train_statistics: \n", train_statistics)
 
     ## Apply outlier indicators on validation and test
 
     # get train outlier columns
     train_outiler_cols = get_train_features_with_suffix(train_statistics, the_suffix=outlier_col_suffix)
     # Add outlier indicators to val and test in those specific features
-    add_outlier_indicators_on_features_fn = partial(add_outlier_indicators_on_features, the_train_statistics=train_statistics, X_train_numeric_features=train_outiler_cols, outlier_col_suffix=outlier_col_suffix)
+    add_outlier_indicators_on_features_fn = partial(add_outlier_indicators_on_features,
+                                                    the_train_statistics=train_statistics,
+                                                    X_train_numeric_features=train_outiler_cols,
+                                                    outlier_col_suffix=outlier_col_suffix)
     X_val, _ = add_outlier_indicators_on_features_fn(X_val)
     X_test, _ = add_outlier_indicators_on_features_fn(X_test)
 
     # Validate outliers detection: Test if train outlier statistics are different than val outlier statistics
-    remove_suffix=False
-    train_outlier_cols = get_train_features_with_suffix(train_statistics, the_suffix=outlier_col_suffix, remove_suffix=remove_suffix)
-    remove_suffix=True
-    train_orig_outlier_cols = get_train_features_with_suffix(train_statistics, the_suffix=outlier_col_suffix, remove_suffix=remove_suffix)
-    #X_train_outliers = X_train.loc[(X_train[train_outlier_cols]==1).any(axis=1), train_orig_outlier_cols]
-    #X_val_outliers = X_val.loc[(X_val[train_outlier_cols]==1).any(axis=1), train_orig_outlier_cols]
-    #print(f"\n# The train outliers:\n {X_train_outliers}")
-    #alpha = 0.01 # significance level
-    #dfs_dict_to_test = {'X_val_outliers': X_val_outliers}
-    #train_val_outlier_means_test = test_if_features_statistically_different(X_train_outliers, dfs_dict_to_test, alpha=alpha)
-    #print('\n# Test if train and validation outliers means are statisically not different:\n', train_val_outlier_means_test)
+    remove_suffix = False
+    train_outlier_cols = get_train_features_with_suffix(train_statistics, the_suffix=outlier_col_suffix,
+                                                        remove_suffix=remove_suffix)
+    remove_suffix = True
+    train_orig_outlier_cols = get_train_features_with_suffix(train_statistics, the_suffix=outlier_col_suffix,
+                                                             remove_suffix=remove_suffix)
+    # X_train_outliers = X_train.loc[(X_train[train_outlier_cols]==1).any(axis=1), train_orig_outlier_cols]
+    # X_val_outliers = X_val.loc[(X_val[train_outlier_cols]==1).any(axis=1), train_orig_outlier_cols]
+    # print(f"\n# The train outliers:\n {X_train_outliers}")
+    # alpha = 0.01 # significance level
+    # dfs_dict_to_test = {'X_val_outliers': X_val_outliers}
+    # train_val_outlier_means_test = test_if_features_statistically_different(X_train_outliers, dfs_dict_to_test, alpha=alpha)
+    # print('\n# Test if train and validation outliers means are statisically not different:\n', train_val_outlier_means_test)
 
     # Impute outliers features
 
     train_statistics = add_winsorization_values_to_train_statistics(X_train, train_statistics)
-    #print("# Updated train_statistics: \n", train_statistics)
+    # print("# Updated train_statistics: \n", train_statistics)
 
     X_train = winsorize_outliers(X_train, train_statistics)
     X_val = winsorize_outliers(X_val, train_statistics)
     X_test = winsorize_outliers(X_test, train_statistics)
 
-    #X_train_outliers_mean = X_train.loc[(X_train[train_outlier_cols]==1).any(axis=1), train_orig_outlier_cols].mean().rename("Outlier rows means")
-    #X_train_imputed_outliers_mean = X_train.loc[(X_train[train_outlier_cols]==1).any(axis=1), train_orig_outlier_cols].mean().rename("Imputed outlier rows means")
-    #X_train_imputed_outliers_mean = pd.concat([X_train_outliers_mean, X_train_imputed_outliers_mean], axis=1)
-    #print(f"\n# See how the means of the outliers rows changed after the imputations:\n {X_train_imputed_outliers_mean}")
-    #print(train[X_train[train_outlier_cols]==1])
-    #print(X_train)
+    # X_train_outliers_mean = X_train.loc[(X_train[train_outlier_cols]==1).any(axis=1), train_orig_outlier_cols].mean().rename("Outlier rows means")
+    # X_train_imputed_outliers_mean = X_train.loc[(X_train[train_outlier_cols]==1).any(axis=1), train_orig_outlier_cols].mean().rename("Imputed outlier rows means")
+    # X_train_imputed_outliers_mean = pd.concat([X_train_outliers_mean, X_train_imputed_outliers_mean], axis=1)
+    # print(f"\n# See how the means of the outliers rows changed after the imputations:\n {X_train_imputed_outliers_mean}")
+    # print(train[X_train[train_outlier_cols]==1])
+    # print(X_train)
 
     # Engineer new features
     X_train, new_features_list = engineer_new_features(X_train)
     X_val, _ = engineer_new_features(X_val)
     X_test, _ = engineer_new_features(X_test)
-    #print('# X_train new engineered features:\n', X_train[new_features_list])
+    # print('# X_train new engineered features:\n', X_train[new_features_list])
     train_statistics = add_new_features_statistics_to_train_statistics(X_train, train_statistics, new_features_list)
     train_statistics = add_binary_property_to_train_statistics(train_statistics, 'is_engineered', new_features_list)
-    train_statistics = add_binary_property_to_train_statistics(train_statistics, 'is_engineered', [feature+"_is_outlier" for feature in train_outiler_cols]) # outlier features are also engineered
-    #print("\n# Updated train_statistics: \n", train_statistics)
+    train_statistics = add_binary_property_to_train_statistics(train_statistics, 'is_engineered',
+                                                               [feature + "_is_outlier" for feature in
+                                                                train_outiler_cols])  # outlier features are also engineered
+    # print("\n# Updated train_statistics: \n", train_statistics)
     n_new_features = train_statistics['is_engineered'].sum()
-    #print(f"\n# Including outliers, we have succuesfully created {n_new_features} new engineered features!")
-
+    # print(f"\n# Including outliers, we have succuesfully created {n_new_features} new engineered features!")
 
     # Drop highly correlated features
 
-    add_print=False
-    X_train, correlated_dropped_features = drop_high_correlation_features(X_train, train_statistics, method='pearson', high_corrleation_threshold=0.9, add_print=add_print)
-    train_statistics = add_binary_property_to_train_statistics(train_statistics, 'is_correlated_to_drop', correlated_dropped_features)
+    add_print = False
+    X_train, correlated_dropped_features = drop_high_correlation_features(X_train, train_statistics, method='pearson',
+                                                                          high_correlation_threshold=0.9,
+                                                                          add_print=add_print)
+    train_statistics = add_binary_property_to_train_statistics(train_statistics, 'is_correlated_to_drop',
+                                                               correlated_dropped_features)
     correlated_dropped_features = get_train_feautres_with_property(train_statistics, 'is_correlated_to_drop')
     X_val = X_val.drop(columns=correlated_dropped_features)
     X_test = X_test.drop(columns=correlated_dropped_features)
 
-    #print(f"\n# Updated X_train after highly correalted features dropped:\n{X_train}")
+    # print(f"\n# Updated X_train after highly correalted features dropped:\n{X_train}")
 
-    #print(f"\n# Current correlations in X_train:\n{X_train.corr()}")
+    # print(f"\n# Current correlations in X_train:\n{X_train.corr()}")
 
     # Normalize dataset
 
@@ -966,14 +1308,14 @@ def main():
     train_statistics['mean'] = X_train.mean().T
     train_statistics['std'] = X_train.std().T
     # standardize train, validation and test
-    add_print=False
+    add_print = False
     X_train = standardize_df_using_train_statistics(X_train, train_statistics, add_print=add_print)
-    add_print=False
+    add_print = False
     X_val = standardize_df_using_train_statistics(X_val, train_statistics, add_print=add_print)
     X_test = standardize_df_using_train_statistics(X_test, train_statistics, add_print=add_print)
 
-    #print("\n # The new standardized train set:\n")
-    #print(X_train)
+    # print("\n # The new standardized train set:\n")
+    # print(X_train)
 
     # Balance Target
 
@@ -984,13 +1326,14 @@ def main():
     train = pd.concat([X_train, y_train], axis=1)
     val = pd.concat([X_val, y_val], axis=1)
 
-    upsample_target_minority_fn = partial(upsample_target_minority, the_train_statistics=train_statistics, random_state=42)
+    upsample_target_minority_fn = partial(upsample_target_minority, the_train_statistics=train_statistics,
+                                          random_state=42)
     X_train, y_train = upsample_target_minority_fn(train)
-    #print(f"\n# After upsampling, the current train target distribution is:\n{y_train.value_counts(normalize=False, dropna=False)}")
+    # print(f"\n# After upsampling, the current train target distribution is:\n{y_train.value_counts(normalize=False, dropna=False)}")
 
     # final preprocessing
     types_of_features_to_drop = ['is_categorical_to_drop', 'is_correlated_to_drop']
-    dropping_errors = 'ignore' # don't report if feature is missing
+    dropping_errors = 'ignore'  # don't report if feature is missing
     ## drop highly correlated features:
     drop_features_with_train_statistics_property_fn = partial(
         drop_features_with_train_statistics_property, the_train_statistics=train_statistics,
@@ -1015,37 +1358,38 @@ def main():
     # Fix plot_roc_curves, so it'll receive plot axis as input, for plotting several graphs one above the other
     # Updated function to support one model only
 
-
     best_feed_forward_set_of_features = [
-        'alcohol','total_acidity/free_sulfur_dioxide','sulphates',
-        'density','free_sulfur_dioxide/total_sulfur_dioxide',
-        'free_sulfur_dioxide','pH_is_outlier','density_is_outlier',
-        'chlorides','pH','total_sulfur_dioxide','fixed_acidity',
-        'residual_sugar_is_outlier','residual_sugar',
-        'volatile_acidity_is_outlier','citric_acid',
-        'chlorides_is_outlier','free_sulfur_dioxide_is_outlier',
-        'alcohol_is_outlier','type_white','citric_acid_is_outlier',
-        'sulphates_is_outlier','fixed_acidity_is_outlier','volatile_acidity']
+        'alcohol', 'total_acidity/free_sulfur_dioxide', 'sulphates',
+        'density', 'free_sulfur_dioxide/total_sulfur_dioxide',
+        'free_sulfur_dioxide', 'pH_is_outlier', 'density_is_outlier',
+        'chlorides', 'pH', 'total_sulfur_dioxide', 'fixed_acidity',
+        'residual_sugar_is_outlier', 'residual_sugar',
+        'volatile_acidity_is_outlier', 'citric_acid',
+        'chlorides_is_outlier', 'free_sulfur_dioxide_is_outlier',
+        'alcohol_is_outlier', 'type_white', 'citric_acid_is_outlier',
+        'sulphates_is_outlier', 'fixed_acidity_is_outlier', 'volatile_acidity']
 
     train_statistics = add_binary_property_to_train_statistics(
         train_statistics, 'is_feature_selected',
         best_feed_forward_set_of_features)
-    #print(train_statistics)
+    # print(train_statistics)
 
     selected_features = get_train_feautres_with_property(train_statistics, 'is_feature_selected')
-    #print(f"The model with {len(selected_features)} selected features: {selected_features}")
+    # print(f"The model with {len(selected_features)} selected features: {selected_features}")
 
     X_train = X_train[selected_features]
     X_val = X_val[selected_features]
     plot_time = 'unique'
-    train_evaluate_plot_report_sklearn_classification_model_engineered_features = partial(train_evaluate_plot_report_sklearn_classification_model, the_X_train=X_train, the_y_train=y_train, the_X_val=X_val, the_y_val=y_val, export_metrics_to_csv=True, plot_time=plot_time, to_plot=False)
+    train_evaluate_plot_report_sklearn_classification_model_engineered_features = partial(
+        train_evaluate_plot_report_sklearn_classification_model, the_X_train=X_train, the_y_train=y_train,
+        the_X_val=X_val, the_y_val=y_val, export_metrics_to_csv=True, plot_time=plot_time, to_plot=False)
 
     model = RandomForestClassifier(random_state=0)
     model_name_engineered = str(model) + "_selected_features"
 
-    model_metrics, _ = train_evaluate_plot_report_sklearn_classification_model_engineered_features(the_model=model, the_model_name=model_name_engineered, axs=None)
-
-
+    model_metrics, _ = train_evaluate_plot_report_sklearn_classification_model_engineered_features(the_model=model,
+                                                                                                   the_model_name=model_name_engineered,
+                                                                                                   axs=None)
 
     feature_importance = pd.DataFrame.from_dict(model_metrics.iloc[-1]['feature_importance'], orient='index')
     important_features = get_important_features(feature_importance)
@@ -1058,11 +1402,9 @@ def main():
     train_statistics = add_binary_property_to_train_statistics(
         train_statistics, 'is_important',
         important_features)
-    #print(train_statistics)
+    # print(train_statistics)
 
-
-    #print(f"# The current model most important features: {important_features}")
-
+    # print(f"# The current model most important features: {important_features}")
 
     # Our most important features
     important_features = get_train_feautres_with_property(train_statistics, 'is_important')
@@ -1082,8 +1424,8 @@ def main():
     hyper_parameter = 'max_depth'
     val_optimized_value = 14
     train_optimized_value = 8
-    mean_optimized_value = int((val_optimized_value+train_optimized_value)/2)
-    model.set_params(**{hyper_parameter:mean_optimized_value}) # # Our Best Model, max_depth=11
+    mean_optimized_value = int((val_optimized_value + train_optimized_value) / 2)
+    model.set_params(**{hyper_parameter: mean_optimized_value})  # # Our Best Model, max_depth=11
     train_evaluate_plot_report_sklearn_classification_model_engineered_features = partial(
         train_evaluate_plot_report_sklearn_classification_model,
         the_X_train=X_train,
@@ -1093,8 +1435,8 @@ def main():
         the_model=model)
 
     # Validation set
-    the_X_val=X_val
-    the_y_val=y_val
+    the_X_val = X_val
+    the_y_val = y_val
 
     # Model Name
     model_name = 'prod_val_' + str(model) + '_best_' + str(len(important_features)) + '_features'
