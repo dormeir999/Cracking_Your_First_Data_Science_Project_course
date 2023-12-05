@@ -1,9 +1,10 @@
 from datetime import datetime
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.neighbors import KNeighborsClassifier
 
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.inspection import permutation_importance
-from sklearn.metrics import roc_curve, roc_auc_score, RocCurveDisplay, confusion_matrix, classification_report
+from sklearn.metrics import roc_curve, roc_auc_score, RocCurveDisplay, confusion_matrix, classification_report, f1_score
 from typing import List
 
 import matplotlib.pyplot as plt
@@ -13,6 +14,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from scipy import stats
 from scipy.stats import skew, kurtosis
+from functools import partial
 
 
 def print_function_name(func):
@@ -54,7 +56,7 @@ def transform_numeric_target_feature_to_binary(the_df: pd.DataFrame, target_col:
 
 @print_function_name
 def split_dataset(the_df: pd.DataFrame, target_col: str, the_test_size: float = 0.2, the_random_state: int = 42) -> (
-pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame):
+        pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame):
     """
     Split a DataFrame into training, validation, and testing sets, while maintaining similar target distribution in all.
 
@@ -82,6 +84,7 @@ pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFra
     )
 
     return the_X_train, the_X_test, the_X_val, the_y_train, the_y_test, the_y_val
+
 
 @print_function_name
 def test_if_significant(p_value, alpha=0.05, print_text=False):
@@ -121,7 +124,7 @@ def test_if_features_statistically_different(the_X_train, dfs_dict, alpha=0.05):
         train_val_outlier_means = pd.concat([train_val_outlier_means, X_df_outlier_means], axis=1)
         # calc the mean for both, just to get a sense of the size of difference
         train_val_outlier_means['difference'] = (
-                    train_val_outlier_means['mean_train'] - train_val_outlier_means[f'mean_{the_df_name}']).round(3)
+                train_val_outlier_means['mean_train'] - train_val_outlier_means[f'mean_{the_df_name}']).round(3)
         for feature in train_val_outlier_means.index:
             # test the normality of the difference
             statatistic, p_value = stats.shapiro(the_X_train[feature] - the_df[feature])
@@ -896,7 +899,6 @@ def plot_roc_curves(the_y_train, the_y_prob_train, the_y_val, the_y_prob_val, ax
     plt.tight_layout()
 
 
-
 @print_function_name
 def get_model_metrics(the_y_val, the_y_pred, the_y_prob_val, the_feature_importance, model, model_params,
                       model_name='baseline', existing_model_metrics=None, export_to_csv=False):
@@ -940,7 +942,7 @@ def get_model_metrics(the_y_val, the_y_pred, the_y_prob_val, the_feature_importa
     class_report[[('support', '1'), ('support', '0')]] = class_report[[('support', '1'), ('support', '0')]].astype(int)
     ## create distribution 1, lift 1, lift 0
     class_report[('distribution', '1')] = class_report[('support', '1')] / (
-                class_report[('support', '0')] + class_report[('support', '1')])
+            class_report[('support', '0')] + class_report[('support', '1')])
     class_report[('lift', '1')] = class_report[('precision', '1')] / class_report[('distribution', '1')]
     class_report[('lift', '0')] = class_report[('precision', '0')] / (1 - class_report[('distribution', '1')])
     class_report = class_report.rename(columns={('support', 'accuracy'): 'accuracy'}).drop(
@@ -954,7 +956,7 @@ def get_model_metrics(the_y_val, the_y_pred, the_y_prob_val, the_feature_importa
                                        ('f1-score', '1'), 'AUC', ('precision', '0'), ('lift', '0'), ('recall', '0')])
     # add feature importance
     the_feature_importance = the_feature_importance if isinstance(model_name, dict) else \
-    the_feature_importance.round(3).to_dict()['importance']
+        the_feature_importance.round(3).to_dict()['importance']
     class_report['feature_importance'] = [the_feature_importance]
     # add modeling metdata
     class_report['model'] = [model]
@@ -1142,6 +1144,327 @@ def import_data(filename: str = "winequalityN.csv", data_dir: str = "data/raw/")
     return pd.read_csv(file_path)
 
 
+def get_AUC_score(the_X_val, the_y_val, the_model):
+    """
+    Computes the AUC (Area Under the Curve) score for a given model using validation data.
+
+    Parameters:
+    - the_X_val (pd.DataFrame): DataFrame containing validation features.
+    - the_y_val (pd.Series): Series containing validation target values.
+    - the_model: The trained model object.
+
+    Returns:
+    - float: The AUC score of the model on the validation data.
+    """
+    the_score = roc_auc_score(the_y_val, the_model.predict_proba(the_X_val)[:, 1])
+    return the_score
+
+
+@print_function_name
+def find_best_model_greedy_feed_forward(the_X_train, the_y_train, the_X_val, the_y_val, the_model, the_metric_fn,
+                                        the_metric_name, print_each_iteration=False, plot_iterations=True,
+                                        n_features=None):
+    """
+    Applies greedy feed-forward feature selection to find the best performing model based on a specified metric.
+
+    Parameters:
+    - the_X_train (pd.DataFrame): DataFrame containing training features.
+    - the_y_train (pd.Series): Series containing training target values.
+    - the_X_val (pd.DataFrame): DataFrame containing validation features.
+    - the_y_val (pd.Series): Series containing validation target values.
+    - the_model: The model object to be trained and evaluated.
+    - the_metric_fn: Function to evaluate the model.
+    - the_metric_name (str): Name of the metric used for evaluation.
+    - print_each_iteration (bool, optional): If True, prints score for each iteration. Defaults to False.
+    - plot_iterations (bool, optional): If True, plots the metric scores across iterations. Defaults to True.
+    - n_features (int, optional): Number of top features to consider. Defaults to considering all features.
+
+    Returns:
+    - Tuple: The best model after greedy feature selection and the set of selected features.
+    """
+    if n_features:
+        the_X_train = the_X_train.iloc[:, :n_features]
+        the_X_val = the_X_val.iloc[:, :n_features]
+    selected_features = []  # List to store selected features
+    n_trained_models = 0
+    iteration_scores = []
+    best_model_per_num_features = {}
+    for num_features in range(1, len(the_X_train.columns) + 1):
+        print(f"Training models with {num_features} features...")
+        best_feature = None  # To store the best feature for the current iteration
+        best_iteration_score = 0  # To store the best score for the current iteration
+        for feature in the_X_train.columns:
+            if feature not in selected_features:  # Avoid features already selected
+                feature_combo = selected_features + [feature]
+                X_train_selected = the_X_train[feature_combo]
+                X_val_selected = the_X_val[feature_combo]
+
+                # Train your model using X_selected and y_train
+                the_model.fit(X_train_selected, the_y_train)
+                n_trained_models += 1
+                # Evaluate your model (you can use any evaluation metric)
+                iteration_score = the_metric_fn(the_X_val=X_val_selected, the_y_val=the_y_val, the_model=the_model)
+                if print_each_iteration:
+                    print("iteration_score", iteration_score)
+                iteration_scores += [iteration_score]
+
+                # Check if the current iteration score is better
+                if iteration_score > best_iteration_score:
+                    best_iteration_score = iteration_score
+                    best_feature = feature
+                    best_feature_combo = feature_combo
+
+        # If a better feature is found for this iteration, add it to selected features
+        if best_feature is not None:
+            selected_features.append(best_feature)
+
+        # Update best model per num_features
+        best_model_per_num_features.update({f'{num_features}': {'best_achieved_score': best_iteration_score,
+                                                                'best_set_of_features': best_feature_combo}})
+        print(f"best_feature_combo:", best_feature_combo)
+
+    print(f"{n_trained_models} models were trained")
+
+    if plot_iterations:
+        best_model_per_num_features = pd.DataFrame(best_model_per_num_features).T
+        best_model_per_num_features['best_achieved_score'] = best_model_per_num_features['best_achieved_score'].astype(
+            float)
+        best_n_features = best_model_per_num_features['best_achieved_score'].idxmax()
+        best_overall_score = \
+        best_model_per_num_features[best_model_per_num_features.index == best_n_features]['best_achieved_score'].values[
+            0]
+        the_best_set_of_features = best_model_per_num_features[best_model_per_num_features.index == best_n_features][
+            'best_set_of_features'].values[0]
+        best_model_per_num_features.best_achieved_score.plot(
+            title=f'Best achieved forward selection {the_metric_name} for {str(the_model)} is {np.round(best_overall_score, 3)} with {best_n_features} features')
+        plt.tight_layout()
+
+    # recreate best model
+    X_train_selected = the_X_train[the_best_set_of_features]
+    X_val_selected = the_X_val[the_best_set_of_features]
+    the_best_model = the_model.fit(X_train_selected, the_y_train)
+    iteration_score = the_metric_fn(the_X_val=X_val_selected, the_y_val=the_y_val, the_model=the_best_model)
+    assert iteration_score == best_overall_score
+    return the_best_model, the_best_set_of_features
+
+
+@print_function_name
+def find_best_model_greedy_feed_backward(the_X_train, the_y_train, the_X_val, the_y_val, the_model, the_metric_fn,
+                                         the_metric_name, print_each_iteration=False, plot_iterations=True,
+                                         n_features=None):
+    """
+    Applies greedy feed-backward feature elimination to find the best performing model based on a specified metric.
+
+    Starting with all features, this function iteratively removes the least contributing feature (based on the evaluation metric) until the desired number of features is reached or no further improvement is observed.
+
+    Parameters:
+    - the_X_train (pd.DataFrame): DataFrame containing training features.
+    - the_y_train (pd.Series): Series containing training target values.
+    - the_X_val (pd.DataFrame): DataFrame containing validation features.
+    - the_y_val (pd.Series): Series containing validation target values.
+    - the_model: The model object to be trained and evaluated.
+    - the_metric_fn: Function to evaluate the model.
+    - the_metric_name (str): Name of the metric used for evaluation.
+    - print_each_iteration (bool, optional): If True, prints score for each iteration. Defaults to False.
+    - plot_iterations (bool, optional): If True, plots the metric scores across iterations. Defaults to True.
+    - n_features (int, optional): Maximum number of top features to consider. Defaults to considering all features.
+
+    Returns:
+    - Tuple: The best model after greedy feature elimination and the set of remaining features.
+
+    The function trains multiple models by progressively removing the least significant features based on the provided evaluation metric. The process continues until the specified number of features is reached or removing more features does not improve the model performance.
+    """
+    if n_features:
+        n_features += 1
+        the_X_train = the_X_train.iloc[:, :n_features]
+        the_X_val = the_X_val.iloc[:, :n_features]
+    selected_features = list(the_X_train.columns)  # Start with all features
+    n_trained_models = 0
+    iteration_scores = []
+    best_model_per_num_features = {}
+    for num_features in range(len(the_X_train.columns) + 1, 2, -1):
+        print(f"Training models with {num_features - 2} features...")
+        worst_feature = None  # To store the worst feature for the current iteration
+        worst_iteration_score = 1  # To store the worst score for the current iteration
+        for feature in selected_features:
+            feature_combo = [feat for feat in selected_features if feat != feature]
+            X_train_selected = the_X_train[feature_combo]
+            X_val_selected = the_X_val[feature_combo]
+
+            # Train your model using X_selected and y_train
+            the_model.fit(X_train_selected, the_y_train)
+            n_trained_models += 1
+            # Evaluate your model (you can use any evaluation metric)
+            iteration_score = the_metric_fn(the_X_val=X_val_selected, the_y_val=the_y_val, the_model=the_model)
+            if print_each_iteration:
+                print("iteration_score", iteration_score)
+            iteration_scores += [iteration_score]
+
+            # Check if the current iteration score is worse
+            if iteration_score < worst_iteration_score:
+                worst_iteration_score = iteration_score
+                worst_feature = feature
+                worst_feature_combo = feature_combo
+
+        # If a worse feature is found for this iteration, remove it from selected features
+        if worst_feature is not None:
+            selected_features.remove(worst_feature)
+
+        # Update best model per num_features
+        best_model_per_num_features.update({f'{num_features - 2}': {'best_achieved_score': worst_iteration_score,
+                                                                    'best_set_of_features': worst_feature_combo}})
+        print(f"best_set_of_features:", worst_feature_combo)
+
+    print(f"{n_trained_models} models were trained")
+
+    if plot_iterations:
+        best_model_per_num_features = pd.DataFrame(best_model_per_num_features).T
+        best_model_per_num_features['best_achieved_score'] = best_model_per_num_features['best_achieved_score'].astype(
+            float)
+        best_n_features = best_model_per_num_features['best_achieved_score'].idxmax()
+        best_overall_score = \
+        best_model_per_num_features[best_model_per_num_features.index == best_n_features]['best_achieved_score'].values[
+            0]
+        the_best_set_of_features = best_model_per_num_features[best_model_per_num_features.index == best_n_features][
+            'best_set_of_features'].values[0]
+        best_model_per_num_features.best_achieved_score.plot(
+            title=f'Best achieved backward selection {the_metric_name} for {str(model)} is {np.round(best_overall_score, 3)} with {best_n_features} features')
+        plt.tight_layout()
+
+    # recreate best model
+    X_train_selected = the_X_train[the_best_set_of_features]
+    X_val_selected = the_X_val[the_best_set_of_features]
+    the_best_model = the_model.fit(X_train_selected, the_y_train)
+    iteration_score = the_metric_fn(the_X_val=X_val_selected, the_y_val=the_y_val, the_model=the_best_model)
+    assert iteration_score == best_overall_score
+    return the_best_model, the_best_set_of_features
+
+
+def optimize_model_complexity_early_stopping(the_model, the_X_train,
+                                             the_y_train, the_X_val, the_y_val, the_hyper_parameter,
+                                             the_values_range, metric_fn=get_AUC_score, metric_name='AUC',
+                                             diff_periods=1, train_optimization_value=0.02):
+    """
+    Optimizes a model's hyperparameter by monitoring early stopping criteria on training and validation datasets.
+
+    This function iterates over a range of hyperparameter values to find the optimal setting where the performance
+    improvement either becomes negligible or starts decreasing. It uses the concept of early stopping to prevent overfitting.
+
+    Parameters:
+    - the_model: The model object to be optimized.
+    - the_X_train (pd.DataFrame): DataFrame containing training features.
+    - the_y_train (pd.Series): Series containing training target values.
+    - the_X_val (pd.DataFrame): DataFrame containing validation features.
+    - the_y_val (pd.Series): Series containing validation target values.
+    - the_hyper_parameter (str): The name of the hyperparameter to be optimized.
+    - the_values_range (iterable): A range of values to test for the hyperparameter.
+    - metric_fn (function, optional): Function to evaluate the model. Defaults to get_AUC_score.
+    - metric_name (str, optional): Name of the evaluation metric. Defaults to 'AUC'.
+    - diff_periods (int, optional): The number of periods for calculating the difference in metric scores. Defaults to 1.
+    - train_optimization_value (float, optional): The threshold for minimal acceptable improvement in training score. Defaults to 0.02.
+
+    Returns:
+    - pd.DataFrame: DataFrame containing metric scores for training and validation sets across the tested hyperparameter values.
+    - The optimal hyperparameter value based on validation score.
+    - The optimal hyperparameter value based on training score improvement threshold.
+
+    The function trains the model for each hyperparameter value and evaluates it on both training and validation datasets.
+    It plots the metric scores to visually determine the point of diminishing returns or performance degradation, aiding in the selection of the optimal hyperparameter value.
+    """
+    model_params = the_model.get_params()
+    the_values_scores_on_train = {}
+    the_values_scores_on_val = {}
+    for value in the_values_range:
+        print(f'Training {the_hyper_parameter}={value} . . .')
+        model_params[the_hyper_parameter] = value
+        the_model.set_params(**model_params)
+        the_model = the_model.fit(the_X_train.values, the_y_train.values)
+        the_values_scores_on_train[value] = metric_fn(the_X_train.values, the_y_train, the_model)
+        the_values_scores_on_val[value] = metric_fn(the_X_val.values, the_y_val, the_model)
+    res = pd.DataFrame(the_values_scores_on_train.values(), the_values_scores_on_train.keys()).rename(
+        columns={0: 'Train'})
+    res['Validation'] = the_values_scores_on_val.values()
+    res['validation_diff'] = res.Validation.diff(periods=diff_periods)
+    res['train_diff'] = res.Train.diff(periods=diff_periods)
+    if len(res[res['validation_diff'] <= 0]):  # get value before the decrease in validation
+        first_non_negative_diff_value = res[res.index < res[res['validation_diff'] <= 0].index[0]].index[-1]
+    else:  # no decrease in validation - get last value
+        first_non_negative_diff_value = res.index[-1]
+    if len(res[res['train_diff'] <= train_optimization_value]):  # get value before the decrease in validation
+        train_first_non_negative_diff_value = \
+        res[res.index < res[res['train_diff'] <= train_optimization_value].index[0]].index[-1]
+    else:  # no decrease in validation - get last value
+        train_first_non_negative_diff_value = res.index[-1]
+    title = f'''{str(the_model)} **{metric_name}**:
+    First {diff_periods} preiods non-increasing validation value: {the_hyper_parameter}={first_non_negative_diff_value},
+    and first train increase value of less than {train_optimization_value} is: {the_hyper_parameter}={train_first_non_negative_diff_value}'''
+    res.drop(columns=['validation_diff', 'train_diff']).plot(title=title, figsize=(8, 6))
+    plt.xlabel(the_hyper_parameter)
+    plt.ylabel(metric_name)
+    plt.legend()
+    plt.xticks(res.index.tolist())
+    plt.axvline(first_non_negative_diff_value, linestyle='--', color='orange')
+    plt.axvline(train_first_non_negative_diff_value, linestyle='--')
+    plt.tight_layout()
+    plt.show()
+    return res, first_non_negative_diff_value, train_first_non_negative_diff_value
+
+
+def move_threshold(the_model, the_X_train, the_y_train, the_X_val, the_y_val, metric_fn=f1_score,
+                   metric_name='f1-score', to_plot=True):
+    """
+    Determines the optimal decision threshold for a classification model to maximize a specified metric.
+
+    This function iterates over a range of potential decision thresholds for classifying instances.
+    It calculates the desired metric (such as F1-score) for each threshold to identify the one that
+    yields the best performance on the training dataset. It also evaluates the model performance on
+    the validation dataset using the identified threshold.
+
+    Parameters:
+    - the_model: The trained model object.
+    - the_X_train (pd.DataFrame): DataFrame containing training features.
+    - the_y_train (pd.Series): Series containing training target values.
+    - the_X_val (pd.DataFrame): DataFrame containing validation features.
+    - the_y_val (pd.Series): Series containing validation target values.
+    - metric_fn (function, optional): The metric function used for optimization (e.g., f1_score). Defaults to f1_score.
+    - metric_name (str, optional): The name of the metric being optimized. Defaults to 'f1-score'.
+    - to_plot (bool, optional): Flag to plot the metric scores against different thresholds. Defaults to True.
+
+    Returns:
+    - The optimal decision threshold value.
+    - The best metric score achieved on the training set.
+
+    The function first predicts the probability scores for the training set, then iterates over a range
+    of thresholds to find the optimal one based on the specified metric. It also evaluates the metric
+    score on the validation set using the optimal threshold and optionally plots the metric scores across
+    all tested thresholds.
+    """
+    thresholds = np.linspace(0, 1, 100)
+    calculated_metrics = {}
+    # Calc metric on each threshold value
+    for threshold in thresholds:
+        proba = the_model.predict_proba(the_X_train.values)[:, 1]
+        the_y_pred = (proba >= threshold) * 1
+        calculated_metrics[threshold] = metric_fn(the_y_train, the_y_pred)
+    calculated_metrics = pd.DataFrame.from_dict(calculated_metrics, orient='index').rename(columns={0: metric_name})
+    # Find best metric value and threshold
+    the_best_threshold = calculated_metrics.idxmax().values[0]
+    the_best_score = calculated_metrics.max().values[0]
+    # Get validation score
+    proba = the_model.predict_proba(the_X_val.values)[:, 1]
+    y_pred = (proba >= the_best_threshold) * 1
+    validation_score = metric_fn(the_y_val, y_pred)
+    if to_plot:
+        # Plot results
+        calculated_metrics.plot(
+            title=f'''Train best {metric_name} is {the_best_score.round(2)}, for decision threshold={the_best_threshold.round(2)},
+For Validation, {metric_name}={validation_score.round(2)}''')
+        plt.xlabel("Decision Thresholds")
+        plt.ylabel(metric_name)
+        plt.show()
+    return the_best_threshold, the_best_score
+
+
 def main():
     # Load the data
     try:
@@ -1150,13 +1473,13 @@ def main():
     except FileNotFoundError as e:
         print(e)
         # Handle the error appropriately (e.g., exit the script or log the error)
-
+        exit()
+    add_print = False
+    ## Define target
     target = 'quality'
 
-    df = transform_numeric_target_feature_to_binary(df, target_col='quality', threshold=7)
-    X_train, X_test, X_val, y_train, y_test, y_val = split_dataset(df, target_col='quality')
-
-    # Validate outliers detection: Test if train outlier statistics are different than val outlier statistics
+    df = transform_numeric_target_feature_to_binary(df, target_col=target, threshold=7)
+    X_train, X_test, X_val, y_train, y_test, y_val = split_dataset(df, target_col=target)
 
     # Import the warnings module
     import warnings
@@ -1167,27 +1490,30 @@ def main():
 
     # Show all columns (don't replace some with "...")
     pd.set_option('display.max_columns', None)
+
+    ## Test if train statistics are different than val and test statistics
     alpha = 0.01  # significance level
     dfs_dict_to_test = {'X_val': X_val, 'X_test': X_test}
     train_val_outlier_means_test = test_if_features_statistically_different(X_train, dfs_dict_to_test, alpha=alpha)
-    # print('\n# Test if train, validation and test sets means are statisically not different:\n', train_val_outlier_means_test)
+    print('\n# Test if train, validation and test sets means are statisically not different:\n',
+          train_val_outlier_means_test)
 
-    # Missing Values imputation
+    ## Missing Values imputation
+
     # Create a variable to hold all train statistics,
     # and insert the features with missing data, and transpose the matrix
     train_statistics = X_train.describe(include='all').T
     # Add a column to flag features with missing values
     len_X_train = len(X_train)
     train_statistics['has_na'] = (train_statistics['count'] < len_X_train) * 1
-    statisticis_to_show = train_statistics.loc[train_statistics['has_na'] == True, ['mean', 'has_na']]
 
-    # Create a function for missing values imputation, as we will imputate 3 times:
     # for train, for valiation and for test
-
     # Impute missing values
-    X_train = imputate_missing_values('X_train', X_train, train_statistics, add_print=False)
-    X_val = imputate_missing_values('X_val', X_val, train_statistics, add_print=False)
-    X_test = imputate_missing_values('X_test', X_test, train_statistics, add_print=False)
+    X_train = imputate_missing_values('X_train', X_train, train_statistics, add_print=add_print)
+    X_val = imputate_missing_values('X_val', X_val, train_statistics, add_print=add_print)
+    X_test = imputate_missing_values('X_test', X_test, train_statistics, add_print=add_print)
+
+    ## Handle Categoricals
 
     # Define parameters for the functions: cateorical features names, and if should one categoy be dropped for every feature
     categorical_features = ['type']
@@ -1205,18 +1531,21 @@ def main():
     train_statistics = add_new_features_statistics_to_train_statistics(X_train, train_statistics, train_categories)
     train_statistics = add_binary_property_to_train_statistics(train_statistics, 'is_category', train_categories)
 
-
     # Get category features and categories of train, from train_statistics
     categorical_features = get_train_feautres_with_property(train_statistics, 'is_categorical_to_drop')
     categories_to_use_from_train = get_train_feautres_with_property(train_statistics, 'is_category')
     # Create a partial function, pre-set with these parameters, to be run on both X_val and X_test
-    from functools import partial
+
     one_hot_encode_categoricals_fn = partial(one_hot_encode_categoricals, categorical_features=categorical_features,
                                              categories_to_use_from_train=categories_to_use_from_train)
     X_val, _ = one_hot_encode_categoricals_fn(X_val)
     X_test, _ = one_hot_encode_categoricals_fn(X_test)
-    # add kurtosis and skew statistics
+
+    ## add kurtosis and skew statistics
     train_statistics = add_kurtosis_skew_statistics(X_train, train_statistics)
+
+    ## Handle Outliers
+
     # Detect Outliers
     # Add outlier column indicator, having 1 for outlier rows
     X_train_numeric_features = None  # When none, assume train dataset and find all relevent columns
@@ -1227,9 +1556,8 @@ def main():
 
     # Update outlier statistics to train_statistics
     train_statistics = add_new_features_statistics_to_train_statistics(X_train, train_statistics, train_outiler_cols)
-    # print("# Updated train_statistics: \n", train_statistics)
 
-    ## Apply outlier indicators on validation and test
+    # Apply outlier indicators on validation and test
 
     # get train outlier columns
     train_outiler_cols = get_train_features_with_suffix(train_statistics, the_suffix=outlier_col_suffix)
@@ -1241,54 +1569,48 @@ def main():
     X_val, _ = add_outlier_indicators_on_features_fn(X_val)
     X_test, _ = add_outlier_indicators_on_features_fn(X_test)
 
-    # Validate outliers detection: Test if train outlier statistics are different than val outlier statistics
+    # Validate outliers detection: Test if train outlier statistics are different from val outlier statistics
     remove_suffix = False
     train_outlier_cols = get_train_features_with_suffix(train_statistics, the_suffix=outlier_col_suffix,
                                                         remove_suffix=remove_suffix)
     remove_suffix = True
     train_orig_outlier_cols = get_train_features_with_suffix(train_statistics, the_suffix=outlier_col_suffix,
                                                              remove_suffix=remove_suffix)
-    # X_train_outliers = X_train.loc[(X_train[train_outlier_cols]==1).any(axis=1), train_orig_outlier_cols]
-    # X_val_outliers = X_val.loc[(X_val[train_outlier_cols]==1).any(axis=1), train_orig_outlier_cols]
-    # print(f"\n# The train outliers:\n {X_train_outliers}")
-    # alpha = 0.01 # significance level
-    # dfs_dict_to_test = {'X_val_outliers': X_val_outliers}
-    # train_val_outlier_means_test = test_if_features_statistically_different(X_train_outliers, dfs_dict_to_test, alpha=alpha)
-    # print('\n# Test if train and validation outliers means are statisically not different:\n', train_val_outlier_means_test)
+    X_train_outliers = X_train.loc[(X_train[train_outlier_cols] == 1).any(axis=1), train_orig_outlier_cols]
+    X_val_outliers = X_val.loc[(X_val[train_outlier_cols] == 1).any(axis=1), train_orig_outlier_cols]
+    print(f"\n# The train outliers:\n {X_train_outliers}")
+    alpha = 0.01  # significance level
+    dfs_dict_to_test = {'X_val_outliers': X_val_outliers}
+    train_val_outlier_means_test = test_if_features_statistically_different(X_train_outliers, dfs_dict_to_test,
+                                                                            alpha=alpha)
+    print('\n# Test if train and validation outliers means are statisically not different:\n',
+          train_val_outlier_means_test)
 
     # Impute outliers features
 
     train_statistics = add_winsorization_values_to_train_statistics(X_train, train_statistics)
-    # print("# Updated train_statistics: \n", train_statistics)
 
     X_train = winsorize_outliers(X_train, train_statistics)
     X_val = winsorize_outliers(X_val, train_statistics)
     X_test = winsorize_outliers(X_test, train_statistics)
 
-    # X_train_outliers_mean = X_train.loc[(X_train[train_outlier_cols]==1).any(axis=1), train_orig_outlier_cols].mean().rename("Outlier rows means")
-    # X_train_imputed_outliers_mean = X_train.loc[(X_train[train_outlier_cols]==1).any(axis=1), train_orig_outlier_cols].mean().rename("Imputed outlier rows means")
-    # X_train_imputed_outliers_mean = pd.concat([X_train_outliers_mean, X_train_imputed_outliers_mean], axis=1)
-    # print(f"\n# See how the means of the outliers rows changed after the imputations:\n {X_train_imputed_outliers_mean}")
-    # print(train[X_train[train_outlier_cols]==1])
-    # print(X_train)
+    ## Engineer new features
 
-    # Engineer new features
     X_train, new_features_list = engineer_new_features(X_train)
     X_val, _ = engineer_new_features(X_val)
     X_test, _ = engineer_new_features(X_test)
-    # print('# X_train new engineered features:\n', X_train[new_features_list])
+
     train_statistics = add_new_features_statistics_to_train_statistics(X_train, train_statistics, new_features_list)
     train_statistics = add_binary_property_to_train_statistics(train_statistics, 'is_engineered', new_features_list)
     train_statistics = add_binary_property_to_train_statistics(train_statistics, 'is_engineered',
                                                                [feature + "_is_outlier" for feature in
                                                                 train_outiler_cols])  # outlier features are also engineered
-    # print("\n# Updated train_statistics: \n", train_statistics)
+
     n_new_features = train_statistics['is_engineered'].sum()
-    # print(f"\n# Including outliers, we have succuesfully created {n_new_features} new engineered features!")
+    print(f"\n# Including outliers, we have successfully created {n_new_features} new engineered features!")
 
-    # Drop highly correlated features
+    ## Drop highly correlated features
 
-    add_print = False
     X_train, correlated_dropped_features = drop_high_correlation_features(X_train, train_statistics, method='pearson',
                                                                           high_correlation_threshold=0.9,
                                                                           add_print=add_print)
@@ -1298,46 +1620,30 @@ def main():
     X_val = X_val.drop(columns=correlated_dropped_features)
     X_test = X_test.drop(columns=correlated_dropped_features)
 
-    # print(f"\n# Updated X_train after highly correalted features dropped:\n{X_train}")
-
-    # print(f"\n# Current correlations in X_train:\n{X_train.corr()}")
-
-    # Normalize dataset
+    ## Normalize dataset
 
     # Update train_statistics with current X_train mean and std
     train_statistics['mean'] = X_train.mean().T
     train_statistics['std'] = X_train.std().T
     # standardize train, validation and test
-    add_print = False
     X_train = standardize_df_using_train_statistics(X_train, train_statistics, add_print=add_print)
-    add_print = False
     X_val = standardize_df_using_train_statistics(X_val, train_statistics, add_print=add_print)
     X_test = standardize_df_using_train_statistics(X_test, train_statistics, add_print=add_print)
 
-    # print("\n # The new standardized train set:\n")
-    # print(X_train)
-
-    # Balance Target
+    ## Balance Target
 
     # Update train statistics with the target distribution and mark
     train_statistics = add_target_to_train_statistics(y_train, train_statistics, target)
 
     # Concatenate the feature with the target before upsampling
     train = pd.concat([X_train, y_train], axis=1)
-    val = pd.concat([X_val, y_val], axis=1)
 
     upsample_target_minority_fn = partial(upsample_target_minority, the_train_statistics=train_statistics,
                                           random_state=42)
     X_train, y_train = upsample_target_minority_fn(train)
     # print(f"\n# After upsampling, the current train target distribution is:\n{y_train.value_counts(normalize=False, dropna=False)}")
 
-    # final preprocessing
-    types_of_features_to_drop = ['is_categorical_to_drop', 'is_correlated_to_drop']
-    dropping_errors = 'ignore'  # don't report if feature is missing
-    ## drop highly correlated features:
-    drop_features_with_train_statistics_property_fn = partial(
-        drop_features_with_train_statistics_property, the_train_statistics=train_statistics,
-        property_list=types_of_features_to_drop, errors=dropping_errors)
+    ## final preprocessing
 
     # fix columns names
     X_train = replace_columns_spaces_with_underscores(X_train)
@@ -1345,19 +1651,46 @@ def main():
     X_test = replace_columns_spaces_with_underscores(X_test)
     train_statistics = replace_columns_spaces_with_underscores(train_statistics.T).T
 
-    ## confusion matrix
-    ## Feature importance
+    ## Model Selection
+
     # Create dataset without engineered features
     types_of_features_to_drop = ['is_engineered']
-    ## drop engineered features:
+    dropping_errors = 'ignore'
+    # drop engineered features:
     drop_features_with_train_statistics_property_fn = partial(
         drop_features_with_train_statistics_property, the_train_statistics=train_statistics,
         property_list=types_of_features_to_drop, errors=dropping_errors)
     X_train_orig = drop_features_with_train_statistics_property_fn(X_train)
     X_val_orig = drop_features_with_train_statistics_property_fn(X_val)
-    # Fix plot_roc_curves, so it'll receive plot axis as input, for plotting several graphs one above the other
-    # Updated function to support one model only
+    # create a partial function for all models that will be trained on the dataset WITHOUT engineered features
+    plot_time = 'first'
+    train_evaluate_plot_report_sklearn_classification_model_original_features = partial(train_evaluate_plot_report_sklearn_classification_model, the_X_train=X_train_orig, the_y_train=y_train, the_X_val=X_val_orig, the_y_val=y_val, export_metrics_to_csv=True, to_plot=True, plot_time=plot_time)
+    # create a partial function for all models that will be trained on the dataset WITH engineered features
+    plot_time = 'second'
+    train_evaluate_plot_report_sklearn_classification_model_engineered_features = partial(train_evaluate_plot_report_sklearn_classification_model, the_X_train=X_train, the_y_train=y_train, the_X_val=X_val, the_y_val=y_val, export_metrics_to_csv=True, plot_time=plot_time)
 
+    # KNeighborsClassifier
+    model = KNeighborsClassifier()
+    model_name_engineered = str(model) + "_engineered_features"
+    model_metrics, axs = train_evaluate_plot_report_sklearn_classification_model_original_features(the_model=model)
+    model_metrics, axs = train_evaluate_plot_report_sklearn_classification_model_engineered_features(the_model=model, the_model_name=model_name_engineered, axs=axs)
+
+
+    ## Feature Selection
+
+    # feed backward features selection - skipped
+
+    # model = RandomForestClassifier(random_state=0)
+    # metric_name = 'AUC'
+    # metric_fn = get_AUC_score
+    # n_features = None
+    # best_model, best_feed_backward_set_of_features = find_best_model_greedy_feed_backward(
+    #     the_X_train=X_train, the_y_train=y_train, the_X_val=X_val, the_y_val=y_val, the_model=model, the_metric_fn=metric_fn, the_metric_name=metric_name, n_features=n_features)
+    #
+    # print("# The best feed backward set of features are:", best_feed_backward_set_of_features)
+
+    # feed forward features selection
+    # assign features we've already found are best, instead of rerunning a feed forward search
     best_feed_forward_set_of_features = [
         'alcohol', 'total_acidity/free_sulfur_dioxide', 'sulphates',
         'density', 'free_sulfur_dioxide/total_sulfur_dioxide',
@@ -1369,13 +1702,23 @@ def main():
         'alcohol_is_outlier', 'type_white', 'citric_acid_is_outlier',
         'sulphates_is_outlier', 'fixed_acidity_is_outlier', 'volatile_acidity']
 
+    if not best_feed_forward_set_of_features:
+        model = RandomForestClassifier(random_state=0)
+        metric_name = 'AUC'
+        metric_fn = get_AUC_score
+        n_features = None
+        best_model, best_feed_forward_set_of_features = find_best_model_greedy_feed_forward(
+            the_X_train=X_train, the_y_train=y_train, the_X_val=X_val, the_y_val=y_val, the_model=model,
+            the_metric_fn=metric_fn, the_metric_name=metric_name, n_features=n_features)
+
+    print("# The best feed forward set of features are:", best_feed_forward_set_of_features)
+
     train_statistics = add_binary_property_to_train_statistics(
         train_statistics, 'is_feature_selected',
         best_feed_forward_set_of_features)
-    # print(train_statistics)
 
     selected_features = get_train_feautres_with_property(train_statistics, 'is_feature_selected')
-    # print(f"The model with {len(selected_features)} selected features: {selected_features}")
+    print(f"# The model with {len(selected_features)} selected features: {selected_features}")
 
     X_train = X_train[selected_features]
     X_val = X_val[selected_features]
@@ -1391,26 +1734,20 @@ def main():
                                                                                                    the_model_name=model_name_engineered,
                                                                                                    axs=None)
 
+    # important features selection
     feature_importance = pd.DataFrame.from_dict(model_metrics.iloc[-1]['feature_importance'], orient='index')
     important_features = get_important_features(feature_importance)
 
-    important_features = ['fixed_acidity', 'volatile_acidity', 'citric_acid', 'residual_sugar',
-                          'chlorides', 'free_sulfur_dioxide', 'total_sulfur_dioxide', 'density', 'pH',
-                          'sulphates', 'alcohol', 'type_white', 'total_acidity/free_sulfur_dioxide',
-                          'free_sulfur_dioxide/total_sulfur_dioxide']
+    # important_features = ['fixed_acidity', 'volatile_acidity', 'citric_acid', 'residual_sugar',
+    #                       'chlorides', 'free_sulfur_dioxide', 'total_sulfur_dioxide', 'density', 'pH',
+    #                       'sulphates', 'alcohol', 'type_white', 'total_acidity/free_sulfur_dioxide',
+    #                       'free_sulfur_dioxide/total_sulfur_dioxide']
 
     train_statistics = add_binary_property_to_train_statistics(
         train_statistics, 'is_important',
         important_features)
-    # print(train_statistics)
 
-    # print(f"# The current model most important features: {important_features}")
-
-    # Our most important features
-    important_features = get_train_feautres_with_property(train_statistics, 'is_important')
-    X_train = X_train[important_features]
-    X_val = X_val[important_features]
-    X_test = X_test[important_features]
+    print(f"# The current model most important features: {important_features}")
 
     # Our most important features
     important_features = get_train_feautres_with_property(train_statistics, 'is_important')
@@ -1418,7 +1755,45 @@ def main():
     X_val = X_val[important_features]
     X_test = X_test[important_features]
 
-    # Load model function, we best model
+    ## Model Optimization
+
+    # optimize model complexity
+    plt.rcParams.update({'font.size': 11})
+
+    hyper_parameter = 'max_depth'
+    range_values = np.arange(1, int(len(important_features) * 1.5))
+    metric_fn = get_AUC_score
+    metric_name = 'AUC'
+    opt_res, val_optimized_value, train_optimized_value = optimize_model_complexity_early_stopping(model, X_train,
+                                                                                                   y_train, X_val,
+                                                                                                   y_val,
+                                                                                                   hyper_parameter,
+                                                                                                   range_values,
+                                                                                                   metric_fn,
+                                                                                                   metric_name)
+
+    print(f"# Train optimized {hyper_parameter} model:")
+    model = RandomForestClassifier(random_state=0)
+    hyper_parameter = 'max_depth'
+    # val_optimized_value = 14
+    model.set_params(**{hyper_parameter: val_optimized_value})
+    model_name = str(model)
+
+    model_metrics, _ = train_evaluate_plot_report_sklearn_classification_model_engineered_features(
+        the_model=model, the_model_name=model_name, axs=None)
+
+    print(f"# Validation optimized {hyper_parameter} model:")
+    model = RandomForestClassifier(random_state=0)
+    hyper_parameter = 'max_depth'
+    # train_optimized_value = 8
+    model.set_params(**{hyper_parameter: train_optimized_value})
+    model_name = str(model)
+
+    model_metrics, _ = train_evaluate_plot_report_sklearn_classification_model_engineered_features(
+        the_model=model, the_model_name=model_name, axs=None)
+
+    print(f"# Train and Validation mean optimized {hyper_parameter} model:")
+    # Load model function, with best model
     plot_time = 'unique'
     model = RandomForestClassifier(random_state=0)
     hyper_parameter = 'max_depth'
@@ -1434,17 +1809,25 @@ def main():
         plot_time=plot_time,
         the_model=model)
 
-    # Validation set
-    the_X_val = X_val
-    the_y_val = y_val
+    model_metrics, _ = train_evaluate_plot_report_sklearn_classification_model_engineered_features(
+        the_model_name=model_name,
+        the_X_val=X_val,
+        the_y_val=y_val)
+
+    # Threshold moving
+
+    best_threshold, best_score = move_threshold(model, X_train, y_train, X_val, y_val)
+    # no substinal improvment - skip threshold moving
+
+    ## Model Validation on test
 
     # Model Name
     model_name = 'prod_val_' + str(model) + '_best_' + str(len(important_features)) + '_features'
 
     model_metrics, _ = train_evaluate_plot_report_sklearn_classification_model_engineered_features(
         the_model_name=model_name,
-        the_X_val=the_X_val,
-        the_y_val=the_y_val)
+        the_X_val=X_test,
+        the_y_val=y_test)
 
     print(model_metrics)
 
