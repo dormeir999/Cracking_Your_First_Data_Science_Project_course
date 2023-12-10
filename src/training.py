@@ -1,3 +1,7 @@
+import pandas as pd
+
+from utils import print_function_name, import_data, transform_numeric_target_feature_to_binary
+
 from datetime import datetime
 from sklearn import tree
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
@@ -13,9 +17,6 @@ from sklearn.tree import DecisionTreeClassifier
 from typing import List
 
 import matplotlib.pyplot as plt
-import numpy as np
-import os
-import pandas as pd
 from sklearn.model_selection import train_test_split
 from scipy import stats
 from scipy.stats import skew, kurtosis
@@ -25,41 +26,10 @@ import pickle
 from sklearn.base import BaseEstimator
 
 
-def print_function_name(func):
-    """
-    Decorator that prints the name of the function when it is called.
-
-    Parameters:
-    - func (callable): The function to be decorated.
-
-    Returns:
-    - callable: The wrapped function.
-    """
-
-    def wrapper(*args, **kwargs):
-        print(f"{func.__name__}()")
-        return func(*args, **kwargs)
-
-    return wrapper
 
 
-@print_function_name
-def transform_numeric_target_feature_to_binary(the_df: pd.DataFrame, target_col: str = 'quality',
-                                               threshold: int = 7) -> pd.DataFrame:
-    """
-   Transform a numeric target feature in a DataFrame into a binary representation.
 
-   Parameters:
-   - the_df (pd.DataFrame): DataFrame containing the target feature.
-   - target_col (str): Name of the target column. Defaults to 'quality'.
-   - threshold (int): Threshold value for binarization. Defaults to 7.
 
-   Returns:
-   - pd.DataFrame: Modified DataFrame with the target feature binarized.
-   """
-    the_df[target_col] = (the_df[target_col] >= threshold) * 1
-
-    return the_df
 
 
 @print_function_name
@@ -1086,38 +1056,7 @@ def transform_target_to_series(the_df, target_col='quality'):
     return the_df
 
 
-@print_function_name
-def import_data(filename: str = "winequalityN.csv", data_dir: str = "data/raw/") -> pd.DataFrame:
-    """
-    Imports data from a specified file located in a given directory.
 
-    Parameters:
-    - filename (str): Name of the file to be imported. Defaults to "winequalityN.csv".
-    - data_dir (str): Relative path to the directory containing the data file. Defaults to "../data/raw/".
-
-    Returns:
-    - pd.DataFrame: DataFrame containing the imported data.
-    """
-    # Determine the path to the directory containing this script
-    module_dir = os.getcwd()
-    if os.path.split(os.getcwd())[-1] == 'src':
-        os.chdir("..")
-        module_dir = os.getcwd()
-    # Construct the path to the data file
-    data_dir = os.path.join(module_dir, data_dir)
-    file_path = os.path.join(data_dir, filename)
-    print("Attempting to load data from:", file_path)
-
-    # Check if the file exists
-    if not os.path.isfile(file_path):  # If doesn't exit, try the educative coding environment location
-        file_path = "/usercode/" + filename
-        if not os.path.isfile(file_path):
-            print(f"File not found: {file_path}")
-            raise FileNotFoundError(f"File not found: {file_path}")
-
-    # Read and return the data
-    print("Data imported successfully!")
-    return pd.read_csv(file_path)
 
 
 def get_AUC_score(the_X_val, the_y_val, the_model):
@@ -1794,6 +1733,11 @@ def save_model_to_pickle(model: BaseEstimator, filename='wine_quality_classifier
     if verbose:
         print(f"Saved {filename} succefully!")
 
+@print_function_name
+def export_train_statistics(the_train_statistics, filename='wine_quality_train_statistics.csv', verbose=True):
+    the_train_statistics.to_csv(filename)
+    if verbose:
+        print(f"Successfully saved train_statistics into {filename}!")
 
 
 @print_function_name
@@ -2173,12 +2117,13 @@ def main():
         the_X_val=X_test,
         the_y_val=y_test,
         filename=METRICS_FILENAME)
+    plot_tsne(model, X_test)
 
     print(model_metrics)
     if KEEP_WORKING_DIR:
         os.chdir(orig_dir)
 
-    ## Retrain on all data and save to pickle
+    ## Retrain on all data and save to pickle, save train statistics to csv
 
     # Create Entire dataset: train + validation + test - all with selected features
     y_train = transform_target_to_series(y_train)
@@ -2194,6 +2139,9 @@ def main():
 
     filename='wine_quality_classifier.model'
     save_model_to_pickle(model_prod_entire_dataset, filename)
+
+    filename='wine_quality_train_statistics.csv'
+    export_train_statistics(train_statistics, filename)
 
 
 if __name__ == "__main__":
