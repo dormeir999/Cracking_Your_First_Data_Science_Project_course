@@ -1,4 +1,5 @@
 from datetime import datetime
+from sklearn import tree
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
@@ -780,7 +781,6 @@ def drop_features_with_train_statistics_property(the_df, the_train_statistics, p
     return the_df
 
 
-@print_function_name
 def move_cols_to_first(the_df, cols):
     """
     Move specified columns to the beginning of a DataFrame.
@@ -905,7 +905,8 @@ def plot_roc_curves(the_y_train, the_y_prob_train, the_y_val, the_y_prob_val, ax
 
 @print_function_name
 def get_model_metrics(the_y_val, the_y_pred, the_y_prob_val, the_feature_importance, model, model_params,
-                      model_name='baseline', existing_model_metrics=None, export_to_csv=False, filename='model_metrics.csv'):
+                      model_name='baseline', existing_model_metrics=None, export_to_csv=False,
+                      filename='model_metrics.csv'):
     """
     Generate and retrieve model performance metrics, including confusion matrix, classification report, lift and AUC.
 
@@ -1418,6 +1419,7 @@ def optimize_model_complexity_early_stopping(the_model, the_X_train,
     plt.show()
     return res, first_non_negative_diff_value, train_first_non_negative_diff_value
 
+
 @print_function_name
 def move_threshold(the_model, the_X_train, the_y_train, the_X_val, the_y_val, metric_fn=f1_score,
                    metric_name='f1-score', to_plot=True):
@@ -1473,6 +1475,7 @@ For Validation, {metric_name}={validation_score.round(2)}''')
         plt.show()
     return the_best_threshold, the_best_score
 
+
 @print_function_name
 def plot_tsne(the_model, the_X_val, title='Predictions Visualized with t-SNE'):
     """
@@ -1509,20 +1512,29 @@ def plot_tsne(the_model, the_X_val, title='Predictions Visualized with t-SNE'):
     plt.ylabel("t-SNE component 2")
     plt.show()
 
+
 @print_function_name
-def train_eval_plot_classification_algos_two_datasets(the_X_train, the_y_train, the_X_val, the_y_val, the_train_statistics,
+def train_eval_plot_classification_algos_two_datasets(the_X_train, the_y_train, the_X_val, the_y_val,
+                                                      the_train_statistics,
                                                       the_algos=None,
                                                       features_to_drop_from_train_statistics_in_first='is_engineered',
                                                       model_name_in_second="_engineered_features",
                                                       export_metrics_to_csv=True, to_plot=True,
-                                                      filename='model_metrics.csv'):
+                                                      filename='model_metrics.csv',
+                                                      # Decision Tree plot args:
+                                                      figsize=None, fontsize=15, class_names=None, impurity=False,
+                                                      label='root', filled=True, proportion=True,
+                                                      # MLP architecture plot args:
+                                                      output_label='quality', scale_factor=1, font_size=12):
     """
     Trains, evaluates, and plots a set of classification algorithms on two datasets: one with and one without engineered features,
-    or possible without 'features_to_drop_from_train_statistics_in_first'.
+    or without whatever is defined in 'features_to_drop_from_train_statistics_in_first'.
 
     This function trains a set of classification models on two versions of a dataset: one that includes engineered features
     and one that does not. It evaluates the models, plots performance metrics, and optionally exports these metrics to a CSV file.
     It also visualizes the dataset using t-SNE to provide insights into how the models are performing.
+
+    Additional parameters for Decision Tree and MLP plots are provided to customize the visualizations.
 
     Parameters:
     - the_X_train, the_y_train: The training dataset and labels.
@@ -1534,6 +1546,16 @@ def train_eval_plot_classification_algos_two_datasets(the_X_train, the_y_train, 
     - export_metrics_to_csv (bool): Whether to export the model metrics to a CSV file. Defaults to True.
     - to_plot (bool): Whether to plot the evaluation metrics. Defaults to True.
     - filename (str): Name of the CSV file to export metrics to. Defaults to 'model_metrics.csv'.
+    - figsize (tuple, optional): Size of the plot for the decision tree. Defaults to None.
+    - fontsize (int): Font size for the decision tree plot. Defaults to 15.
+    - class_names (list, optional): List of class names for the decision tree plot. Defaults to None.
+    - impurity (bool): Whether to display impurity in the decision tree plot. Defaults to False.
+    - label (str): Label type for decision tree nodes. Defaults to 'root'.
+    - filled (bool): Whether to fill the decision tree nodes with colors. Defaults to True.
+    - proportion (bool): Whether to display proportions in the decision tree plot. Defaults to True.
+    - output_label (str): Output label for MLP architecture plot. Defaults to 'quality'.
+    - scale_factor (float): Scale factor for the MLP architecture plot. Defaults to 1.
+    - font_size (int): Font size for the MLP architecture plot. Defaults to 12.
 
     Returns:
     - None: The function trains the models and performs plots but does not return any value.
@@ -1541,7 +1563,7 @@ def train_eval_plot_classification_algos_two_datasets(the_X_train, the_y_train, 
     if the_algos is None:
         the_algos = [KNeighborsClassifier(), SVC(probability=True), LogisticRegression(), DecisionTreeClassifier(),
                      RandomForestClassifier(), GradientBoostingClassifier(), MLPClassifier()]
-        print(f"# going to train on: {the_algos}")
+    print(f"# going to train on: {the_algos}")
     # Create dataset without engineered features
     if not features_to_drop_from_train_statistics_in_first is None:
         if not isinstance(features_to_drop_from_train_statistics_in_first, List):
@@ -1579,10 +1601,12 @@ def train_eval_plot_classification_algos_two_datasets(the_X_train, the_y_train, 
 
     # train models with all algos
     for algo in the_algos:
+        print(f"# {algo}")
         the_model = algo
         model_name_engineered = str(the_model) + model_name_in_second
         if not features_to_drop_from_train_statistics_in_first is None:
-            model_metrics, axs = train_evaluate_plot_report_sklearn_classification_model_original_features(the_model=the_model)
+            model_metrics, axs = train_evaluate_plot_report_sklearn_classification_model_original_features(
+                the_model=the_model)
             _, _ = train_evaluate_plot_report_sklearn_classification_model_engineered_features(
                 the_model=the_model, the_model_name=model_name_engineered, axs=axs)
         else:
@@ -1590,6 +1614,168 @@ def train_eval_plot_classification_algos_two_datasets(the_X_train, the_y_train, 
                 the_model=the_model, the_model_name=model_name_engineered)
         if to_plot:
             plot_tsne_fn(the_model)
+
+            # Algo specific plots:
+            if isinstance(algo, DecisionTreeClassifier):
+                plot_decision_tree(the_model, the_X_train, figsize=figsize, fontsize=fontsize, class_names=class_names,
+                                   impurity=impurity,
+                                   label=label, filled=filled, proportion=proportion)
+            elif isinstance(algo, MLPClassifier):
+                feature_names = the_X_train.columns.tolist()  # Assuming X_train is a DataFrame
+                plot_mlp_architecture(the_model, feature_names, output_label=output_label, scale_factor=scale_factor,
+                                      font_size=font_size)  # Adjust font_size if needed
+
+@print_function_name
+def plot_decision_tree(the_model, the_X_train, figsize=None, fontsize=15, class_names=None, impurity=False,
+                       label='root', filled=True, proportion=True):
+    """
+    Plots a decision tree using the trained model and the training dataset.
+
+    This function visualizes a decision tree model, providing insights into how the model makes decisions based on the input features.
+    It allows customization of various aspects of the visualization, such as the size of the plot, font size, whether to display impurities,
+    and more.
+
+    Parameters:
+    - the_model: The trained decision tree model to be visualized.
+    - the_X_train: The training dataset used for the model. It is used to obtain the feature names for the plot.
+    - figsize (tuple, optional): Size of the plot. Defaults to (20, 30) if not provided.
+    - fontsize (int): Font size for the text in the tree nodes. Defaults to 15.
+    - class_names (list, optional): List of class names for the target variable. If not provided, defaults to ['non-quality wines', 'quality wines'].
+    - impurity (bool): Whether to display impurity information at each node. Defaults to False.
+    - label (str): Label type for the nodes. Options include 'root', 'all', etc. Defaults to 'root'.
+    - filled (bool): Whether to color nodes based on the majority class. Defaults to True.
+    - proportion (bool): Whether to display proportions of the majority class in each node. Defaults to True.
+
+    Returns:
+    - None: The function creates a plot of the decision tree but does not return any value.
+    """
+    if figsize is None:
+        figsize = (20, 30)
+    if class_names is None:
+        class_names = ['non-quality wines', 'quality wines']
+    plt.figure(figsize=figsize)
+    tree.plot_tree(the_model, fontsize=fontsize, feature_names=the_X_train.columns.tolist(),
+                   impurity=impurity, label=label, filled=filled, class_names=class_names,
+                   proportion=proportion)
+    plt.tight_layout()
+    plt.show()
+
+
+@print_function_name
+def plot_mlp_architecture(mlp, feature_names, output_label='quality', scale_factor=1.5, font_size=8):
+    """
+    Visualizes the architecture of a trained Multi-Layer Perceptron (MLP) neural network.
+
+    This function creates a diagram of the MLP's layers, including input, hidden, and output layers. It shows the connections
+    between neurons in adjacent layers and labels the input features and output. The visualization is useful for understanding
+    the structure of the MLP and how data flows through it.
+
+    Parameters:
+    - mlp: The trained MLP model whose architecture is to be visualized.
+    - feature_names (list): List of names for the input features.
+    - output_label (str, optional): Label for the output neuron. Defaults to 'quality'.
+    - scale_factor (float, optional): Scaling factor to adjust the spacing between neurons. Defaults to 1.5.
+    - font_size (int, optional): Font size for text annotations in the plot. Defaults to 8.
+
+    Returns:
+    - None: The function creates a plot of the MLP architecture but does not return any value.
+
+    Notes:
+    - The function assumes that the 'mlp' parameter is a trained sklearn MLPClassifier or MLPRegressor instance.
+    - The visualization includes connecting lines representing the weights between neurons in adjacent layers.
+    - Neurons are represented as points, with input neurons labeled with feature names and output neuron labeled with the output label.
+    """
+    layers = [layer.shape[1] for layer in mlp.coefs_]
+    layers.insert(0, mlp.coefs_[0].shape[0])
+
+    fig, ax = plt.subplots(figsize=(12, 8))
+    max_layer_size = max(layers)
+    layer_sizes = [max_layer_size - size for size in layers]
+
+    y_positions_list = []  # To store y_positions for each layer
+
+    for i, size in enumerate(layer_sizes):
+        y_positions = np.linspace(-size / 2, size / 2, layers[i])
+        y_positions_list.append(y_positions)
+        if i < len(layers) - 1:  # Exclude the last layer
+            plt.scatter([i] * layers[i], y_positions * scale_factor, s=100, color='blue')
+
+        if i == 0:  # Input layer
+            for j, name in enumerate(feature_names):
+                plt.text(i - 0.4, y_positions[j] * scale_factor, name, fontsize=font_size, ha='right')
+        elif i == len(layers) - 2:  # Last hidden layer
+            # Add vertical offset to the label
+            plt.text(i + 0.2, (y_positions[0] + 0.85) * scale_factor, r'$f(x)=max(0, w \cdot x + b)$',
+                     fontsize=font_size, ha='left')
+
+    # Plot output neuron (aligned with the last hidden layer's first neuron)
+    output_neuron_y = y_positions_list[-2][0]  # Align with the last hidden layer
+    plt.scatter(len(layers) - 1, output_neuron_y * scale_factor, s=100, color='blue')
+    plt.text(len(layers) - 0.8, output_neuron_y * scale_factor,
+             output_label + '\n' + r'$f(x)=\frac{1}{1+e^{-(w \cdot x + b)}}$', fontsize=font_size, ha='left')
+
+    # Draw lines
+    for i in range(1, len(layers)):
+        weights = mlp.coefs_[i - 1]
+        prev_y_positions = y_positions_list[i - 1]
+        y_positions = y_positions_list[i] if i < len(layers) - 1 else [output_neuron_y]
+        for j in range(weights.shape[0]):
+            for k in range(weights.shape[1]):
+                plt.plot([i - 1, i], [prev_y_positions[j] * scale_factor, y_positions[k] * scale_factor], 'gray')
+
+    plt.title('MLP Architecture', fontsize=font_size)
+    plt.xlabel('Layer', fontsize=font_size)
+    plt.ylabel('Neuron', fontsize=font_size)
+    plt.axis('off')
+    plt.tight_layout()
+    plt.show()
+
+@print_function_name
+def select_best_model_with_model_metrics(filename="model_metrics.csv", metrics='AUC', ascending=False):
+    """
+    Selects and configures the best model based on performance metrics from a CSV file.
+
+    This function reads a CSV file containing model metrics, sorts the models based on specified metrics,
+    and selects the best performing model. It then configures this model with its optimal hyperparameters
+    as found during training. The function is particularly useful for choosing the best model after
+    performing hyperparameter tuning or model comparison.
+
+    Parameters:
+    - filename (str, optional): The name of the CSV file containing model metrics. Defaults to "model_metrics.csv".
+    - metrics (str or list of str, optional): The metric(s) based on which models should be ranked. Defaults to 'AUC'.
+    - ascending (bool or list of bool, optional): Sort order for each metric in 'metrics'. If 'metrics' is a list and 'ascending'
+      is a single bool, the same sort order will be applied to all metrics. If 'metrics' is a list and 'ascending' is also a list,
+      each sort order will be applied to the corresponding metric. Defaults to False.
+
+    Returns:
+    - A sklearn model object: The best performing model, configured with its optimal hyperparameters.
+
+    Notes:
+    - The CSV file should contain columns for model names, hyperparameters, and the specified metrics.
+    - The function uses `eval` to instantiate the model and apply hyperparameters, which may have security implications
+      if the CSV file contains untrusted data.
+    """
+    metrics_df = pd.read_csv(filename)
+    if not isinstance(metrics, List):
+        metrics = [metrics]
+    if not isinstance(ascending, List):
+        ascending = [ascending]
+    if len(ascending) < len(metrics):
+        for i in range(len(metrics) - len(ascending)):
+            ascending = ascending + ascending
+    metrics_df = metrics_df.sort_values(by=metrics, ascending=ascending)
+    first_col = metrics_df.columns[0]
+    metrics_df = move_cols_to_first(metrics_df, [first_col] + metrics + ['model'])
+    print(f"# Best 5 models of {metrics} in ascending order {ascending}: \n {metrics_df.head()}")
+    # Get best model with hyperparams
+    best_model_str = metrics_df.iloc[0]['model'].split('(')[0]
+    best_model_hyper_params_str = metrics_df.iloc[0]['hyper_parameters']
+    print(best_model_hyper_params_str)
+    best_model = eval(best_model_str + '()')
+    best_model_hyper_params = eval(best_model_hyper_params_str)
+    best_model.set_params(**best_model_hyper_params)
+    return best_model
+
 
 @print_function_name
 def main():
@@ -1786,14 +1972,29 @@ def main():
 
     ## Model Selection
     algos = [KNeighborsClassifier(), SVC(probability=True), LogisticRegression(), DecisionTreeClassifier(),
-                         RandomForestClassifier(), GradientBoostingClassifier(), MLPClassifier()]
+             RandomForestClassifier(), GradientBoostingClassifier(), MLPClassifier()]
     # features_to_drop_from_train_statistics_in_first='is_engineered'
     features_to_drop_from_train_statistics_in_first = None
+    # Decision tree plot args
+    figsize, fontsize, class_names, impurity, label, filled, proportion = None, 15, None, False, 'root', True, True
+    # MLP architecture plot args
+    output_label, scale_factor, font_size = 'quality', 1, 12
     train_eval_plot_classification_algos_two_datasets(X_train, y_train, X_val, y_val, train_statistics,
                                                       the_algos=algos,
                                                       features_to_drop_from_train_statistics_in_first=features_to_drop_from_train_statistics_in_first,
                                                       export_metrics_to_csv=True, to_plot=True,
-                                                      filename=METRICS_FILENAME)
+                                                      filename=METRICS_FILENAME,
+                                                      # Decision tree plot args
+                                                      figsize=figsize, fontsize=fontsize, class_names=class_names,
+                                                      impurity=impurity,
+                                                      label=label, filled=filled, proportion=proportion,
+                                                      # MLP architecture plot args
+                                                      output_label=output_label, scale_factor=scale_factor,
+                                                      font_size=font_size)
+
+    # Select final model
+    model = select_best_model_with_model_metrics(metrics=['AUC',"('f1-score', '1')"], ascending=False,
+                                                 filename=METRICS_FILENAME)
 
     ## Feature Selection
 
@@ -1822,7 +2023,7 @@ def main():
         'sulphates_is_outlier', 'fixed_acidity_is_outlier', 'volatile_acidity']
 
     if not best_feed_forward_set_of_features:
-        model = RandomForestClassifier(random_state=0)
+        #model = RandomForestClassifier(random_state=0)
         metric_name = 'AUC'
         metric_fn = get_AUC_score
         n_features = None
@@ -1847,7 +2048,7 @@ def main():
         the_X_val=X_val, the_y_val=y_val, export_metrics_to_csv=True, plot_time=plot_time, to_plot=False,
         filename=METRICS_FILENAME)
 
-    model = RandomForestClassifier(random_state=0)
+    #model = RandomForestClassifier(random_state=0)
     model_name_engineered = str(model) + "_selected_features"
 
     model_metrics, _ = train_evaluate_plot_report_sklearn_classification_model_engineered_features(the_model=model,
@@ -1898,7 +2099,7 @@ def main():
         train_optimized_value = 8
 
     print(f"# Train optimized {hyper_parameter} model:")
-    model = RandomForestClassifier(random_state=0)
+    #model = RandomForestClassifier(random_state=0)
     hyper_parameter = 'max_depth'
     model.set_params(**{hyper_parameter: val_optimized_value})
     model_name = str(model)
@@ -1907,7 +2108,7 @@ def main():
         the_model=model, the_model_name=model_name, axs=None)
 
     print(f"# Validation optimized {hyper_parameter} model:")
-    model = RandomForestClassifier(random_state=0)
+    # model = RandomForestClassifier(random_state=0)
     hyper_parameter = 'max_depth'
     model.set_params(**{hyper_parameter: train_optimized_value})
     model_name = str(model)
@@ -1918,7 +2119,7 @@ def main():
     print(f"# Train and Validation mean optimized {hyper_parameter} model:")
     # Load model function, with best model
     plot_time = 'unique'
-    model = RandomForestClassifier(random_state=0)
+    # model = RandomForestClassifier(random_state=0)
     hyper_parameter = 'max_depth'
     val_optimized_value = 14
     train_optimized_value = 8
