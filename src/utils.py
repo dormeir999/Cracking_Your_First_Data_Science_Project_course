@@ -1,10 +1,14 @@
 from datetime import datetime
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
 
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import roc_curve, roc_auc_score, RocCurveDisplay, confusion_matrix, classification_report, f1_score
+from sklearn.neural_network import MLPClassifier
+from sklearn.svm import SVC
+from sklearn.tree import DecisionTreeClassifier
 from typing import List
 
 import matplotlib.pyplot as plt
@@ -15,6 +19,7 @@ from sklearn.model_selection import train_test_split
 from scipy import stats
 from scipy.stats import skew, kurtosis
 from functools import partial
+from sklearn.manifold import TSNE
 
 
 def print_function_name(func):
@@ -856,7 +861,6 @@ def plot_feature_importance(the_feature_importance, ax, show_sign_color=True, sh
     - None: The function plots the feature importance on the provided axis.
     """
     the_feature_importance = the_feature_importance.copy(deep=True)
-    print("the_feature_importance", the_feature_importance)
     if show_sign_color:
         the_feature_importance['color'] = np.where(the_feature_importance['importance'] >= 0, '#88CCEE', '#CC79A7')
         the_feature_importance['importance'] = the_feature_importance['importance'].abs()
@@ -901,7 +905,7 @@ def plot_roc_curves(the_y_train, the_y_prob_train, the_y_val, the_y_prob_val, ax
 
 @print_function_name
 def get_model_metrics(the_y_val, the_y_pred, the_y_prob_val, the_feature_importance, model, model_params,
-                      model_name='baseline', existing_model_metrics=None, export_to_csv=False):
+                      model_name='baseline', existing_model_metrics=None, export_to_csv=False, filename='model_metrics.csv'):
     """
     Generate and retrieve model performance metrics, including confusion matrix, classification report, lift and AUC.
 
@@ -922,8 +926,8 @@ def get_model_metrics(the_y_val, the_y_pred, the_y_prob_val, the_feature_importa
     # if not existing_model_metrics, import existing metrics from folder if it exists, else create a new dataframe.
     # if existing_model_metrics - use the existing model metrics, in the end we'll append current results to existing.
     if existing_model_metrics is None:
-        if 'model_metrics.csv' in os.listdir():
-            the_model_metrics = pd.read_csv('model_metrics.csv', index_col=0)
+        if filename in os.listdir():
+            the_model_metrics = pd.read_csv(filename, index_col=0)
         else:
             the_model_metrics = pd.DataFrame()
     else:
@@ -971,14 +975,15 @@ def get_model_metrics(the_y_val, the_y_pred, the_y_prob_val, the_feature_importa
         class_report.columns = the_model_metrics.columns
     the_model_metrics = pd.concat([the_model_metrics, class_report], axis=0)
     if export_to_csv:
-        the_model_metrics.to_csv('model_metrics.csv')
+        the_model_metrics.to_csv(filename)
     return the_model_metrics
 
 
 @print_function_name
 def train_evaluate_plot_report_sklearn_classification_model(the_model, the_X_train, the_y_train, the_X_val, the_y_val,
                                                             the_model_name=None, export_metrics_to_csv=True,
-                                                            to_plot=True, plot_time='first', axs=None):
+                                                            to_plot=True, plot_time='first', axs=None,
+                                                            filename='model_metrics.csv'):
     """
     Train, evaluate, plot, and report metrics for a Scikit-learn classification model.
 
@@ -1038,7 +1043,8 @@ def train_evaluate_plot_report_sklearn_classification_model(the_model, the_X_tra
                                           feature_importance, model=the_model,
                                           model_params=model_params,
                                           model_name=the_model_name,
-                                          export_to_csv=export_metrics_to_csv)
+                                          export_to_csv=export_metrics_to_csv,
+                                          filename=filename)
     return the_model_metrics, axs
 
 
@@ -1231,8 +1237,9 @@ def find_best_model_greedy_feed_forward(the_X_train, the_y_train, the_X_val, the
             float)
         best_n_features = best_model_per_num_features['best_achieved_score'].idxmax()
         best_overall_score = \
-        best_model_per_num_features[best_model_per_num_features.index == best_n_features]['best_achieved_score'].values[
-            0]
+            best_model_per_num_features[best_model_per_num_features.index == best_n_features][
+                'best_achieved_score'].values[
+                0]
         the_best_set_of_features = best_model_per_num_features[best_model_per_num_features.index == best_n_features][
             'best_set_of_features'].values[0]
         best_model_per_num_features.best_achieved_score.plot(
@@ -1323,12 +1330,13 @@ def find_best_model_greedy_feed_backward(the_X_train, the_y_train, the_X_val, th
             float)
         best_n_features = best_model_per_num_features['best_achieved_score'].idxmax()
         best_overall_score = \
-        best_model_per_num_features[best_model_per_num_features.index == best_n_features]['best_achieved_score'].values[
-            0]
+            best_model_per_num_features[best_model_per_num_features.index == best_n_features][
+                'best_achieved_score'].values[
+                0]
         the_best_set_of_features = best_model_per_num_features[best_model_per_num_features.index == best_n_features][
             'best_set_of_features'].values[0]
         best_model_per_num_features.best_achieved_score.plot(
-            title=f'Best achieved backward selection {the_metric_name} for {str(model)} is {np.round(best_overall_score, 3)} with {best_n_features} features')
+            title=f'Best achieved backward selection {the_metric_name} for {str(the_model)} is {np.round(best_overall_score, 3)} with {best_n_features} features')
         plt.tight_layout()
 
     # recreate best model
@@ -1340,6 +1348,7 @@ def find_best_model_greedy_feed_backward(the_X_train, the_y_train, the_X_val, th
     return the_best_model, the_best_set_of_features
 
 
+@print_function_name
 def optimize_model_complexity_early_stopping(the_model, the_X_train,
                                              the_y_train, the_X_val, the_y_val, the_hyper_parameter,
                                              the_values_range, metric_fn=get_AUC_score, metric_name='AUC',
@@ -1392,7 +1401,7 @@ def optimize_model_complexity_early_stopping(the_model, the_X_train,
         first_non_negative_diff_value = res.index[-1]
     if len(res[res['train_diff'] <= train_optimization_value]):  # get value before the decrease in validation
         train_first_non_negative_diff_value = \
-        res[res.index < res[res['train_diff'] <= train_optimization_value].index[0]].index[-1]
+            res[res.index < res[res['train_diff'] <= train_optimization_value].index[0]].index[-1]
     else:  # no decrease in validation - get last value
         train_first_non_negative_diff_value = res.index[-1]
     title = f'''{str(the_model)} **{metric_name}**:
@@ -1409,7 +1418,7 @@ def optimize_model_complexity_early_stopping(the_model, the_X_train,
     plt.show()
     return res, first_non_negative_diff_value, train_first_non_negative_diff_value
 
-
+@print_function_name
 def move_threshold(the_model, the_X_train, the_y_train, the_X_val, the_y_val, metric_fn=f1_score,
                    metric_name='f1-score', to_plot=True):
     """
@@ -1464,8 +1473,132 @@ For Validation, {metric_name}={validation_score.round(2)}''')
         plt.show()
     return the_best_threshold, the_best_score
 
+@print_function_name
+def plot_tsne(the_model, the_X_val, title='Predictions Visualized with t-SNE'):
+    """
+    Visualizes the predictions of a model using t-Distributed Stochastic Neighbor Embedding (t-SNE).
 
+    This function applies t-SNE to reduce the dimensionality of the validation set to two dimensions
+    and plots these points, colored by the model's predictions. This visualization can help in
+    understanding how the model is grouping or separating different data points.
+
+    Parameters:
+    - the_model: The trained model used for making predictions.
+    - the_X_val: The validation dataset (features) on which predictions are made.
+    - title (str, optional): The title for the plot. Defaults to 'Predictions Visualized with t-SNE'.
+
+    Returns:
+    - None: The function creates a plot but does not return any value.
+    """
+    # Convert X_val and y_val to numpy arrays
+    X_val_array = np.array(the_X_val)
+
+    # Apply t-SNE to reduce the dimensionality of X_val to 2
+    tsne = TSNE(n_components=2, random_state=0)
+    X_val_tsne = tsne.fit_transform(X_val_array)
+
+    # Use the original k-NN model to predict the classes for X_val
+    y_pred = the_model.predict(X_val_array)
+
+    # Plot the t-SNE-transformed data points, coloring them according to the predicted classes
+    plt.figure(figsize=(10, 8))
+    scatter = plt.scatter(X_val_tsne[:, 0], X_val_tsne[:, 1], c=y_pred, edgecolors='k', marker='o', s=50)
+    plt.legend(*scatter.legend_elements(), title="Predicted Classes")
+    plt.title(f"{str(the_model)} {title}")
+    plt.xlabel("t-SNE component 1")
+    plt.ylabel("t-SNE component 2")
+    plt.show()
+
+@print_function_name
+def train_eval_plot_classification_algos_two_datasets(the_X_train, the_y_train, the_X_val, the_y_val, the_train_statistics,
+                                                      the_algos=None,
+                                                      features_to_drop_from_train_statistics_in_first='is_engineered',
+                                                      model_name_in_second="_engineered_features",
+                                                      export_metrics_to_csv=True, to_plot=True,
+                                                      filename='model_metrics.csv'):
+    """
+    Trains, evaluates, and plots a set of classification algorithms on two datasets: one with and one without engineered features,
+    or possible without 'features_to_drop_from_train_statistics_in_first'.
+
+    This function trains a set of classification models on two versions of a dataset: one that includes engineered features
+    and one that does not. It evaluates the models, plots performance metrics, and optionally exports these metrics to a CSV file.
+    It also visualizes the dataset using t-SNE to provide insights into how the models are performing.
+
+    Parameters:
+    - the_X_train, the_y_train: The training dataset and labels.
+    - the_X_val, the_y_val: The validation dataset and labels.
+    - the_train_statistics: Statistics of the training dataset, used to identify features to drop.
+    - the_algos (list, optional): List of classification algorithms to train. Defaults to common classifiers if None.
+    - features_to_drop_from_train_statistics_in_first (str): Feature property to identify for dropping in the first dataset. Defaults to 'is_engineered'.
+    - model_name_in_second (str): Suffix for model names in the second training round. Defaults to "_engineered_features".
+    - export_metrics_to_csv (bool): Whether to export the model metrics to a CSV file. Defaults to True.
+    - to_plot (bool): Whether to plot the evaluation metrics. Defaults to True.
+    - filename (str): Name of the CSV file to export metrics to. Defaults to 'model_metrics.csv'.
+
+    Returns:
+    - None: The function trains the models and performs plots but does not return any value.
+    """
+    if the_algos is None:
+        the_algos = [KNeighborsClassifier(), SVC(probability=True), LogisticRegression(), DecisionTreeClassifier(),
+                     RandomForestClassifier(), GradientBoostingClassifier(), MLPClassifier()]
+        print(f"# going to train on: {the_algos}")
+    # Create dataset without engineered features
+    if not features_to_drop_from_train_statistics_in_first is None:
+        if not isinstance(features_to_drop_from_train_statistics_in_first, List):
+            types_of_features_to_drop = [features_to_drop_from_train_statistics_in_first]
+        else:
+            types_of_features_to_drop = features_to_drop_from_train_statistics_in_first
+        dropping_errors = 'ignore'
+        # drop engineered features:
+        drop_features_with_train_statistics_property_fn = partial(
+            drop_features_with_train_statistics_property, the_train_statistics=the_train_statistics,
+            property_list=types_of_features_to_drop, errors=dropping_errors)
+        X_train_orig = drop_features_with_train_statistics_property_fn(the_X_train)
+        X_val_orig = drop_features_with_train_statistics_property_fn(the_X_val)
+
+    if to_plot:
+        # prepare tsne plot function
+        plot_tsne_fn = partial(plot_tsne, the_X_val=the_X_val)
+
+    # create a partial function for all models that will be trained on the dataset WITHOUT engineered features
+    if not features_to_drop_from_train_statistics_in_first is None:
+        plot_time = 'first'
+        train_evaluate_plot_report_sklearn_classification_model_original_features = partial(
+            train_evaluate_plot_report_sklearn_classification_model, the_X_train=X_train_orig, the_y_train=the_y_train,
+            the_X_val=X_val_orig, the_y_val=the_y_val, export_metrics_to_csv=export_metrics_to_csv, to_plot=to_plot,
+            plot_time=plot_time, filename=filename)
+        # create a partial function for all models that will be trained on the dataset WITH engineered features
+        plot_time = 'second'
+    else:
+        plot_time = 'unique'
+
+    train_evaluate_plot_report_sklearn_classification_model_engineered_features = partial(
+        train_evaluate_plot_report_sklearn_classification_model, the_X_train=the_X_train, the_y_train=the_y_train,
+        the_X_val=the_X_val,
+        the_y_val=the_y_val, export_metrics_to_csv=export_metrics_to_csv, plot_time=plot_time, filename=filename)
+
+    # train models with all algos
+    for algo in the_algos:
+        the_model = algo
+        model_name_engineered = str(the_model) + model_name_in_second
+        if not features_to_drop_from_train_statistics_in_first is None:
+            model_metrics, axs = train_evaluate_plot_report_sklearn_classification_model_original_features(the_model=the_model)
+            _, _ = train_evaluate_plot_report_sklearn_classification_model_engineered_features(
+                the_model=the_model, the_model_name=model_name_engineered, axs=axs)
+        else:
+            _, _ = train_evaluate_plot_report_sklearn_classification_model_engineered_features(
+                the_model=the_model, the_model_name=model_name_engineered)
+        if to_plot:
+            plot_tsne_fn(the_model)
+
+@print_function_name
 def main():
+    KEEP_WORKING_DIR = True
+    if KEEP_WORKING_DIR:
+        orig_dir = os.getcwd()
+
+    METRICS_FILENAME = 'model_metrics.csv'
+
     # Load the data
     try:
         df = import_data()
@@ -1652,29 +1785,15 @@ def main():
     train_statistics = replace_columns_spaces_with_underscores(train_statistics.T).T
 
     ## Model Selection
-
-    # Create dataset without engineered features
-    types_of_features_to_drop = ['is_engineered']
-    dropping_errors = 'ignore'
-    # drop engineered features:
-    drop_features_with_train_statistics_property_fn = partial(
-        drop_features_with_train_statistics_property, the_train_statistics=train_statistics,
-        property_list=types_of_features_to_drop, errors=dropping_errors)
-    X_train_orig = drop_features_with_train_statistics_property_fn(X_train)
-    X_val_orig = drop_features_with_train_statistics_property_fn(X_val)
-    # create a partial function for all models that will be trained on the dataset WITHOUT engineered features
-    plot_time = 'first'
-    train_evaluate_plot_report_sklearn_classification_model_original_features = partial(train_evaluate_plot_report_sklearn_classification_model, the_X_train=X_train_orig, the_y_train=y_train, the_X_val=X_val_orig, the_y_val=y_val, export_metrics_to_csv=True, to_plot=True, plot_time=plot_time)
-    # create a partial function for all models that will be trained on the dataset WITH engineered features
-    plot_time = 'second'
-    train_evaluate_plot_report_sklearn_classification_model_engineered_features = partial(train_evaluate_plot_report_sklearn_classification_model, the_X_train=X_train, the_y_train=y_train, the_X_val=X_val, the_y_val=y_val, export_metrics_to_csv=True, plot_time=plot_time)
-
-    # KNeighborsClassifier
-    model = KNeighborsClassifier()
-    model_name_engineered = str(model) + "_engineered_features"
-    model_metrics, axs = train_evaluate_plot_report_sklearn_classification_model_original_features(the_model=model)
-    model_metrics, axs = train_evaluate_plot_report_sklearn_classification_model_engineered_features(the_model=model, the_model_name=model_name_engineered, axs=axs)
-
+    algos = [KNeighborsClassifier(), SVC(probability=True), LogisticRegression(), DecisionTreeClassifier(),
+                         RandomForestClassifier(), GradientBoostingClassifier(), MLPClassifier()]
+    # features_to_drop_from_train_statistics_in_first='is_engineered'
+    features_to_drop_from_train_statistics_in_first = None
+    train_eval_plot_classification_algos_two_datasets(X_train, y_train, X_val, y_val, train_statistics,
+                                                      the_algos=algos,
+                                                      features_to_drop_from_train_statistics_in_first=features_to_drop_from_train_statistics_in_first,
+                                                      export_metrics_to_csv=True, to_plot=True,
+                                                      filename=METRICS_FILENAME)
 
     ## Feature Selection
 
@@ -1725,7 +1844,8 @@ def main():
     plot_time = 'unique'
     train_evaluate_plot_report_sklearn_classification_model_engineered_features = partial(
         train_evaluate_plot_report_sklearn_classification_model, the_X_train=X_train, the_y_train=y_train,
-        the_X_val=X_val, the_y_val=y_val, export_metrics_to_csv=True, plot_time=plot_time, to_plot=False)
+        the_X_val=X_val, the_y_val=y_val, export_metrics_to_csv=True, plot_time=plot_time, to_plot=False,
+        filename=METRICS_FILENAME)
 
     model = RandomForestClassifier(random_state=0)
     model_name_engineered = str(model) + "_selected_features"
@@ -1764,18 +1884,22 @@ def main():
     range_values = np.arange(1, int(len(important_features) * 1.5))
     metric_fn = get_AUC_score
     metric_name = 'AUC'
-    opt_res, val_optimized_value, train_optimized_value = optimize_model_complexity_early_stopping(model, X_train,
-                                                                                                   y_train, X_val,
-                                                                                                   y_val,
-                                                                                                   hyper_parameter,
-                                                                                                   range_values,
-                                                                                                   metric_fn,
-                                                                                                   metric_name)
+    OPTIMIZE_MODEL = False
+    if OPTIMIZE_MODEL:
+        opt_res, val_optimized_value, train_optimized_value = optimize_model_complexity_early_stopping(model, X_train,
+                                                                                                       y_train, X_val,
+                                                                                                       y_val,
+                                                                                                       hyper_parameter,
+                                                                                                       range_values,
+                                                                                                       metric_fn,
+                                                                                                       metric_name)
+    else:
+        val_optimized_value = 14
+        train_optimized_value = 8
 
     print(f"# Train optimized {hyper_parameter} model:")
     model = RandomForestClassifier(random_state=0)
     hyper_parameter = 'max_depth'
-    # val_optimized_value = 14
     model.set_params(**{hyper_parameter: val_optimized_value})
     model_name = str(model)
 
@@ -1785,7 +1909,6 @@ def main():
     print(f"# Validation optimized {hyper_parameter} model:")
     model = RandomForestClassifier(random_state=0)
     hyper_parameter = 'max_depth'
-    # train_optimized_value = 8
     model.set_params(**{hyper_parameter: train_optimized_value})
     model_name = str(model)
 
@@ -1807,12 +1930,14 @@ def main():
         the_y_train=y_train,
         export_metrics_to_csv=True,
         plot_time=plot_time,
-        the_model=model)
+        the_model=model,
+        filename=METRICS_FILENAME)
 
     model_metrics, _ = train_evaluate_plot_report_sklearn_classification_model_engineered_features(
         the_model_name=model_name,
         the_X_val=X_val,
-        the_y_val=y_val)
+        the_y_val=y_val,
+        filename=METRICS_FILENAME)
 
     # Threshold moving
 
@@ -1827,9 +1952,12 @@ def main():
     model_metrics, _ = train_evaluate_plot_report_sklearn_classification_model_engineered_features(
         the_model_name=model_name,
         the_X_val=X_test,
-        the_y_val=y_test)
+        the_y_val=y_test,
+        filename=METRICS_FILENAME)
 
     print(model_metrics)
+    if KEEP_WORKING_DIR:
+        os.chdir(orig_dir)
 
 
 if __name__ == "__main__":
