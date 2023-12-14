@@ -21,13 +21,11 @@ from sklearn.metrics import roc_curve, roc_auc_score, RocCurveDisplay, confusion
 from sklearn.neural_network import MLPClassifier
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
-from typing import List
 
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from scipy import stats
 from scipy.stats import skew, kurtosis
-from functools import partial
 from sklearn.manifold import TSNE
 import pickle
 from sklearn.base import BaseEstimator
@@ -119,122 +117,6 @@ def test_if_features_statistically_different(the_X_train, dfs_dict, alpha=0.05):
 
 
 @print_function_name
-def imputate_missing_values(dataset_name, dataset, the_train_statistics, n_rows_to_show=5, add_print=True):
-    """
-    Impute missing values in a dataset using the mean values from training statistics.
-
-    Parameters:
-    - dataset_name (str): Name of the dataset being processed.
-    - dataset (pd.DataFrame): The dataset for imputation.
-    - the_train_statistics (pd.DataFrame): Training statistics for reference.
-    - n_rows_to_show (int): Number of rows to display for demonstration. Defaults to 5.
-    - add_print (bool): Flag to print the demonstration rows. Defaults to True.
-
-    Returns:
-    - pd.DataFrame: Dataset with missing values imputed.
-    """
-    # get a dict of missing values per each feature
-    mean_values = the_train_statistics["mean"].to_dict()
-    # impute missing values, and save those indexes
-    missing_indexes = dataset[dataset.isna().any(axis=1)].index
-    if add_print:
-        to_show = dataset.loc[missing_indexes][:n_rows_to_show]
-        print(f"# First {n_rows_to_show} original {dataset_name} missing values:\n{to_show}\n")
-    # fill the missing values in X_train with the mean values
-    dataset = dataset.fillna(value=mean_values)
-    if add_print:
-        to_show = dataset.loc[missing_indexes][:n_rows_to_show]
-        print(f"# First {n_rows_to_show} imputed {dataset_name} missing values:\n{to_show}\n")
-        missing_values = dataset.isna().sum()
-        print(f"# The number of missing values in columns in {dataset_name}:\n{missing_values}\n")
-    return dataset
-
-
-@print_function_name
-def one_hot_encode_categoricals(the_df, categorical_features=None, drop_one=True, categories_to_use_from_train=None):
-    """
-    Perform one-hot encoding on categorical features in a DataFrame.
-
-    Parameters:
-    - the_df (pd.DataFrame): DataFrame to be encoded.
-    - categorical_features (list): List of categorical feature names. Defaults to ['type'].
-    - drop_one (bool): Flag to drop the first category to avoid multicollinearity. Defaults to True.
-    - categories_to_use_from_train (list): List of categories used in training for consistency.
-
-    Returns:
-    - tuple: Modified DataFrame and a list of new category columns.
-    """
-    # Create the numerical encodings
-    if categorical_features is None:
-        categorical_features = ['type']
-    one_hot_encodings = pd.get_dummies(the_df[categorical_features], drop_first=drop_one)
-    # if val or test, filter categories to the ones that were used in train
-    if categories_to_use_from_train:
-        one_hot_encodings = one_hot_encodings[categories_to_use_from_train]
-    one_hot_encodings_categories = one_hot_encodings.columns.tolist()
-    # Add the encodings to the dataset
-    the_df = pd.concat([the_df, one_hot_encodings], axis=1)
-    # Drop the original categorical_features
-    the_df = the_df.drop(columns=categorical_features)
-    return the_df, one_hot_encodings_categories
-
-
-@print_function_name
-def add_new_features_statistics_to_train_statistics(the_train, the_train_statistics, new_features):
-    """
-    Add descriptive statistics for newly created features to the training statistics table.
-
-    Parameters:
-    - the_train (pd.DataFrame): The training dataset.
-    - the_train_statistics (pd.DataFrame): DataFrame containing statistics for training data.
-    - new_features (list): List of new feature names added to the dataset.
-
-    Returns:
-    - pd.DataFrame: Updated training statistics with new features included.
-    """
-    train_new_features_statistics = the_train[new_features].describe(include='all').T
-    the_train_statistics = pd.concat([the_train_statistics, train_new_features_statistics], axis=0)
-    return the_train_statistics
-
-
-@print_function_name
-def add_binary_property_to_train_statistics(the_train_statistics, the_property, features_list_with_property):
-    """
-    Add a binary property to a group of features in the training statistics table.
-
-    Parameters:
-    - the_train_statistics (pd.DataFrame): DataFrame of training statistics.
-    - the_property (str): Name of the binary property to be added.
-    - features_list_with_property (list): List of features to which the property applies.
-
-    Returns:
-    - pd.DataFrame: Updated training statistics with the new property.
-    """
-    if not the_property in the_train_statistics:
-        the_train_statistics[the_property] = 0
-    if len(features_list_with_property) == 1:
-        features_list_with_property = features_list_with_property[0]
-    the_train_statistics.loc[features_list_with_property, the_property] = 1
-    return the_train_statistics
-
-
-@print_function_name
-def get_train_feautres_with_property(the_train_statistics, the_property):
-    """
-    Extracts a list of features from the train statistics DataFrame that have a specified property.
-
-    Parameters:
-    - the_train_statistics (pd.DataFrame): DataFrame containing training statistics.
-    - the_property (str): The property based on which to filter features.
-
-    Returns:
-    - list: List of feature names that have the specified property.
-    """
-    the_features = the_train_statistics[the_train_statistics[the_property] == 1].index.tolist()
-    return the_features
-
-
-@print_function_name
 def add_kurtosis_skew_statistics(the_df, the_train_statistics):
     """
     Add kurtosis and skew statistics to the training statistics table.
@@ -251,96 +133,6 @@ def add_kurtosis_skew_statistics(the_df, the_train_statistics):
     the_train_statistics['is_many_outliers'] = (the_train_statistics['kurtosis'] >= 3) * 1
     the_train_statistics['is_right_skew'] = (the_train_statistics['skew'] > 0) * 1
     return the_train_statistics
-
-
-@print_function_name
-def add_outlier_indicator(the_df: pd.DataFrame, the_feature: pd.Series, the_train_statistics: pd.DataFrame,
-                          outlier_col_suffix='is_outlier', is_train=False) -> pd.DataFrame:
-    """
-    Add an outlier indicator column for a specific feature in the DataFrame.
-    Outliers are defined as points distant more than 3 std from the mean.
-
-    Parameters:
-    - the_df (pd.DataFrame): DataFrame to be processed.
-    - the_feature (str): Name of the feature to check for outliers.
-    - the_train_statistics (pd.DataFrame): Training statistics for reference.
-    - outlier_col_suffix (str): Suffix for the outlier column name. Defaults to 'is_outlier'.
-    - is_train (bool): Flag to indicate if the dataset is training data. Defaults to False.
-
-    Returns:
-    - tuple: Modified DataFrame and the name of the new outlier column.
-    """
-    outlier_col = the_feature + "_" + outlier_col_suffix
-    # Create is_outlier col if it doesn't exist, and fill with 0 (i.e. no outliers)
-    if not outlier_col in the_df:
-        the_df[outlier_col] = 0
-    # The formula for calculating a z-score is: Z = (X - μ) / σ
-    X = the_df[the_feature]
-    mu = the_train_statistics.loc[the_feature, 'mean']
-    sigma = the_train_statistics.loc[the_feature, 'std']
-    obs_z_scores = (X - mu) / sigma
-    # Get all rows with outliers
-    outliers = obs_z_scores.abs() > 3
-    # Mark outliers
-    if sum(outliers) > 0:
-        the_df.loc[outliers, outlier_col] = 1
-    else:
-        if is_train:  # if train and no outliers, drop column. if val or test, keep zeros.
-            the_df = the_df.drop(columns=outlier_col)
-
-    return the_df, outlier_col
-
-
-@print_function_name
-def add_outlier_indicators_on_features(the_df: pd.DataFrame, the_train_statistics: pd.DataFrame,
-                                       X_train_numeric_features: List = None,
-                                       outlier_col_suffix='is_outlier') -> pd.DataFrame:
-    """
-    Add outlier indicator columns for multiple features in the DataFrame.
-
-    Parameters:
-    - the_df (pd.DataFrame): DataFrame to be processed.
-    - the_train_statistics (pd.DataFrame): Training statistics for reference.
-    - X_train_numeric_features (List): List of numeric feature names to check for outliers.
-    - outlier_col_suffix (str): Suffix for the outlier column names. Defaults to 'is_outlier'.
-
-    Returns:
-    - tuple: Modified DataFrame and a list of new outlier column names.
-    """
-    # If the_features not defined (first run on train), filter out non-numeric features and run on all
-    if not X_train_numeric_features:
-        is_train = True
-        categories = get_train_feautres_with_property(the_train_statistics, 'is_category')
-        X_train_numeric_features = [col for col in the_df.columns if not col in categories]
-    else:
-        is_train = False  # either validation or test
-    new_outlier_cols = []
-    for feature in X_train_numeric_features:
-        the_df, new_outlier_col = add_outlier_indicator(the_df, feature, the_train_statistics,
-                                                        outlier_col_suffix=outlier_col_suffix, is_train=is_train)
-        new_outlier_cols = new_outlier_cols + [new_outlier_col]
-    return the_df, new_outlier_cols
-
-
-@print_function_name
-def get_train_features_with_suffix(the_train_statistics, remove_suffix=True, the_suffix='is_outlier'):
-    """
-    Extracts a list of features from the train statistics DataFrame that have a specified suffix.
-
-    Parameters:
-    - the_train_statistics (pd.DataFrame): DataFrame containing training statistics.
-    - remove_suffix (bool, optional): If True, removes the suffix from the feature names. Defaults to True.
-    - the_suffix (str, optional): The suffix to filter features. Defaults to 'is_outlier'.
-
-    Returns:
-    - list: List of feature names with the specified suffix, optionally without the suffix.
-    """
-    the_train_statistics_features = the_train_statistics.index.to_list()
-    feautres_with_suffix = [feature for feature in the_train_statistics_features if feature.endswith(the_suffix)]
-    if remove_suffix:
-        feautres_with_suffix = [feature.split("_" + the_suffix)[0] for feature in feautres_with_suffix]
-    return feautres_with_suffix
-
 
 @print_function_name
 def add_winsorization_values_to_train_statistics(the_X_train, the_train_statistics, percentiles=None):
@@ -361,45 +153,6 @@ def add_winsorization_values_to_train_statistics(the_X_train, the_train_statisti
     percentile_col_names = [str(col).split(".")[1].replace("0", "") + "%" for col in percentiles]
     the_train_statistics = the_train_statistics.join(winsorization_values[percentile_col_names], how='left')
     return the_train_statistics
-
-
-@print_function_name
-def winsorize_outliers(the_df, the_train_statistics, percentiles=None, outlier_col_suffix='is_outlier'):
-    """
-    Apply winsorization to handle outliers in the DataFrame based on training statistics.
-
-    Parameters:
-    - the_df (pd.DataFrame): DataFrame containing the data.
-    - the_train_statistics (pd.DataFrame): Training statistics with winsorization values.
-    - percentiles (list): List of percentiles used for winsorization. Defaults to [.05, .95].
-
-    Returns:
-    - pd.DataFrame: The DataFrame after applying winsorization to outliers.
-    """
-    # extract original outlier call and is_outliers cols
-    if percentiles is None:
-        percentiles = [.05, .95]
-    remove_suffix = False
-    train_outlier_cols = get_train_features_with_suffix(the_train_statistics, the_suffix=outlier_col_suffix,
-                                                        remove_suffix=remove_suffix)
-    remove_suffix = True
-    train_orig_outlier_cols = get_train_features_with_suffix(the_train_statistics, the_suffix=outlier_col_suffix,
-                                                             remove_suffix=remove_suffix)
-    outlier_cols_mapper = dict(zip(train_orig_outlier_cols, train_outlier_cols))
-    # extract winsorization values
-    percentile_col_names = [str(col).split(".")[1].replace("0", "") + "%" for col in percentiles]
-    winsorization_values = the_train_statistics.loc[train_orig_outlier_cols, percentile_col_names].T
-    # replace min/max outliers with min_winzor/max_winzor
-    for orig_col, is_outlier_col in outlier_cols_mapper.items():
-        min_winzor = winsorization_values[orig_col].min()
-        max_winzor = winsorization_values[orig_col].max()
-        outlier_rows = the_df[is_outlier_col] == 1
-        min_outliers = the_df[orig_col] <= min_winzor
-        max_outliers = the_df[orig_col] >= max_winzor
-        the_df.loc[(outlier_rows) & (min_outliers), orig_col] = min_winzor
-        the_df.loc[(outlier_rows) & (max_outliers), orig_col] = max_winzor
-
-    return the_df
 
 
 @print_function_name
@@ -733,7 +486,7 @@ def drop_features_with_train_statistics_property(the_df, the_train_statistics, p
     - pd.DataFrame: DataFrame after dropping features based on the specified property.
     """
     for type_of_features_to_drop in property_list:
-        features_to_drop = get_train_feautres_with_property(the_train_statistics, type_of_features_to_drop)
+        features_to_drop = get_train_features_with_property(the_train_statistics, type_of_features_to_drop)
         the_df = drop_features(the_df, features_to_drop=features_to_drop, errors=errors)
     return the_df
 
@@ -1733,8 +1486,6 @@ def main():
     if KEEP_WORKING_DIR:
         orig_dir = os.getcwd()
 
-    METRICS_FILENAME = 'model_metrics.csv'
-
     # Load the data
     try:
         df = import_data()
@@ -1745,23 +1496,20 @@ def main():
         exit()
     add_print = False
     ## Define target
-    target = 'quality'
-
     df = transform_numeric_target_feature_to_binary(df, target_col=target, threshold=7)
-    X_train, X_test, X_val, y_train, y_test, y_val = split_dataset(df, target_col=target)
 
-    # Import the warnings module
-    import warnings
+    ## Split to Train, Validation, Test
+    X_train, X_test, X_val, y_train, y_test, y_val = split_dataset(df, target_col=target)
 
     # Ignore the UserWarning from scipy.stats
     # the warnings are saying we have less the 5000 samples so the noramlity test isn't accurate
+    import warnings
     warnings.filterwarnings("ignore", category=UserWarning, module="scipy.stats")
 
     # Show all columns (don't replace some with "...")
     pd.set_option('display.max_columns', None)
 
     ## Test if train statistics are different than val and test statistics
-    alpha = 0.01  # significance level
     dfs_dict_to_test = {'X_val': X_val, 'X_test': X_test}
     train_val_outlier_means_test = test_if_features_statistically_different(X_train, dfs_dict_to_test, alpha=alpha)
     print('\n# Test if train, validation and test sets means are statisically not different:\n',
@@ -1776,7 +1524,20 @@ def main():
     len_X_train = len(X_train)
     train_statistics['has_na'] = (train_statistics['count'] < len_X_train) * 1
 
-    # for train, for valiation and for test
+    # Before imputing missing values, replace all categories missing values with a string,
+    # in case most values in a category are missing
+
+    train_categorical_features = None # it's better to mention categoricals explicitly, like this:
+    # train_categorical_features = ['type']
+    X_train, train_categorical_features = replace_categoricals_missing_values_with_NA_string(X_train,
+                                                                categorical_features=train_categorical_features,
+                                                                 NA_string=NA_string)
+    replace_categoricals_missing_values_with_NA_string_fn = partial(replace_categoricals_missing_values_with_NA_string,
+                                                                    categorical_features=train_categorical_features,
+                                                                    NA_string=NA_string)
+    X_val, _ = replace_categoricals_missing_values_with_NA_string_fn(X_val)
+    X_test, _ = replace_categoricals_missing_values_with_NA_string_fn(X_test)
+
     # Impute missing values
     X_train = imputate_missing_values('X_train', X_train, train_statistics, add_print=add_print)
     X_val = imputate_missing_values('X_val', X_val, train_statistics, add_print=add_print)
@@ -1784,31 +1545,16 @@ def main():
 
     ## Handle Categoricals
 
-    # Define parameters for the functions: cateorical features names, and if should one categoy be dropped for every feature
-    categorical_features = ['type']
-    drop_one = True
-    # Encode categoricals for train, get back the train categories
-    X_train, train_categories = one_hot_encode_categoricals(X_train, categorical_features=categorical_features,
+    # Encode categoricals for train
+    X_train, train_statistics = one_hot_encode_categoricals(X_train, train_statistics,
+                                                            categorical_features=train_categorical_features,
+                                                            drop_one=drop_one)
+    # Encode categoricals for validation and test - categorical_features will be extracted from train_statistics
+    X_val, _ = one_hot_encode_categoricals(X_val, train_statistics,
+                                                            drop_one=drop_one)
+    X_test, _ = one_hot_encode_categoricals(X_test, train_statistics,
                                                             drop_one=drop_one)
 
-    # Add new train cateogories statistics to train_statistics
-
-    # Add proprty 'is_categorical_to_drop' to original cateogorical features
-    train_statistics = add_binary_property_to_train_statistics(train_statistics, 'is_categorical_to_drop',
-                                                               categorical_features)
-    # Add proprty 'is_category' to newly created categories one-hot-encoding features
-    train_statistics = add_new_features_statistics_to_train_statistics(X_train, train_statistics, train_categories)
-    train_statistics = add_binary_property_to_train_statistics(train_statistics, 'is_category', train_categories)
-
-    # Get category features and categories of train, from train_statistics
-    categorical_features = get_train_feautres_with_property(train_statistics, 'is_categorical_to_drop')
-    categories_to_use_from_train = get_train_feautres_with_property(train_statistics, 'is_category')
-    # Create a partial function, pre-set with these parameters, to be run on both X_val and X_test
-
-    one_hot_encode_categoricals_fn = partial(one_hot_encode_categoricals, categorical_features=categorical_features,
-                                             categories_to_use_from_train=categories_to_use_from_train)
-    X_val, _ = one_hot_encode_categoricals_fn(X_val)
-    X_test, _ = one_hot_encode_categoricals_fn(X_test)
 
     ## add kurtosis and skew statistics
     train_statistics = add_kurtosis_skew_statistics(X_train, train_statistics)
@@ -1818,42 +1564,42 @@ def main():
     # Detect Outliers
     # Add outlier column indicator, having 1 for outlier rows
     X_train_numeric_features = None  # When none, assume train dataset and find all relevent columns
-    outlier_col_suffix = 'is_outlier'
     X_train, train_outiler_cols = add_outlier_indicators_on_features(X_train, train_statistics,
                                                                      X_train_numeric_features=X_train_numeric_features,
                                                                      outlier_col_suffix=outlier_col_suffix)
 
-    # Update outlier statistics to train_statistics
-    train_statistics = add_new_features_statistics_to_train_statistics(X_train, train_statistics, train_outiler_cols)
+    # if outliers exist, update outlier statistics to train_statistics
+    if len(train_outiler_cols) > 0:
+        train_statistics = add_new_features_statistics_to_train_statistics(X_train, train_statistics, train_outiler_cols)
 
     # Apply outlier indicators on validation and test
 
     # get train outlier columns
     train_outiler_cols = get_train_features_with_suffix(train_statistics, the_suffix=outlier_col_suffix)
-    # Add outlier indicators to val and test in those specific features
-    add_outlier_indicators_on_features_fn = partial(add_outlier_indicators_on_features,
-                                                    the_train_statistics=train_statistics,
-                                                    X_train_numeric_features=train_outiler_cols,
-                                                    outlier_col_suffix=outlier_col_suffix)
-    X_val, _ = add_outlier_indicators_on_features_fn(X_val)
-    X_test, _ = add_outlier_indicators_on_features_fn(X_test)
+    # if outliers exist in train, add outlier indicators to val and test in those specific features
+    if len(train_outiler_cols) > 0:
+        add_outlier_indicators_on_features_fn = partial(add_outlier_indicators_on_features,
+                                                        the_train_statistics=train_statistics,
+                                                        X_train_numeric_features=train_outiler_cols,
+                                                        outlier_col_suffix=outlier_col_suffix)
+        X_val, _ = add_outlier_indicators_on_features_fn(X_val)
+        X_test, _ = add_outlier_indicators_on_features_fn(X_test)
 
-    # Validate outliers detection: Test if train outlier statistics are different from val outlier statistics
-    remove_suffix = False
-    train_outlier_cols = get_train_features_with_suffix(train_statistics, the_suffix=outlier_col_suffix,
-                                                        remove_suffix=remove_suffix)
-    remove_suffix = True
-    train_orig_outlier_cols = get_train_features_with_suffix(train_statistics, the_suffix=outlier_col_suffix,
-                                                             remove_suffix=remove_suffix)
-    X_train_outliers = X_train.loc[(X_train[train_outlier_cols] == 1).any(axis=1), train_orig_outlier_cols]
-    X_val_outliers = X_val.loc[(X_val[train_outlier_cols] == 1).any(axis=1), train_orig_outlier_cols]
-    print(f"\n# The train outliers:\n {X_train_outliers}")
-    alpha = 0.01  # significance level
-    dfs_dict_to_test = {'X_val_outliers': X_val_outliers}
-    train_val_outlier_means_test = test_if_features_statistically_different(X_train_outliers, dfs_dict_to_test,
-                                                                            alpha=alpha)
-    print('\n# Test if train and validation outliers means are statisically not different:\n',
-          train_val_outlier_means_test)
+        # Validate outliers detection: Test if train outlier statistics are different from val outlier statistics
+        remove_suffix = False
+        train_outlier_cols = get_train_features_with_suffix(train_statistics, the_suffix=outlier_col_suffix,
+                                                            remove_suffix=remove_suffix)
+        remove_suffix = True
+        train_orig_outlier_cols = get_train_features_with_suffix(train_statistics, the_suffix=outlier_col_suffix,
+                                                                 remove_suffix=remove_suffix)
+        X_train_outliers = X_train.loc[(X_train[train_outlier_cols] == 1).any(axis=1), train_orig_outlier_cols]
+        X_val_outliers = X_val.loc[(X_val[train_outlier_cols] == 1).any(axis=1), train_orig_outlier_cols]
+        print(f"\n# The train outliers:\n {X_train_outliers}")
+        dfs_dict_to_test = {'X_val_outliers': X_val_outliers}
+        train_val_outlier_means_test = test_if_features_statistically_different(X_train_outliers, dfs_dict_to_test,
+                                                                                alpha=alpha)
+        print('\n# Test if train and validation outliers means are statisically not different:\n',
+              train_val_outlier_means_test)
 
     # Impute outliers features
 
@@ -1885,7 +1631,7 @@ def main():
                                                                           add_print=add_print)
     train_statistics = add_binary_property_to_train_statistics(train_statistics, 'is_correlated_to_drop',
                                                                correlated_dropped_features)
-    correlated_dropped_features = get_train_feautres_with_property(train_statistics, 'is_correlated_to_drop')
+    correlated_dropped_features = get_train_features_with_property(train_statistics, 'is_correlated_to_drop')
     X_val = X_val.drop(columns=correlated_dropped_features)
     X_test = X_test.drop(columns=correlated_dropped_features)
 
@@ -1987,7 +1733,7 @@ def main():
         train_statistics, 'is_feature_selected',
         best_feed_forward_set_of_features)
 
-    selected_features = get_train_feautres_with_property(train_statistics, 'is_feature_selected')
+    selected_features = get_train_features_with_property(train_statistics, 'is_feature_selected')
     print(f"# The model with {len(selected_features)} selected features: {selected_features}")
 
     X_train = X_train[selected_features]
@@ -2020,7 +1766,7 @@ def main():
     print(f"# The current model most important features: {important_features}")
 
     # Our most important features
-    important_features = get_train_feautres_with_property(train_statistics, 'is_important')
+    important_features = get_train_features_with_property(train_statistics, 'is_important')
     X_train = X_train[important_features]
     X_val = X_val[important_features]
     X_test = X_test[important_features]
@@ -2128,6 +1874,7 @@ def main():
     filename='wine_quality_train_statistics.csv'
     export_train_statistics(train_statistics, filename)
 
+    print("Finished training pipeline!")
 
 if __name__ == "__main__":
     main()
