@@ -69,3 +69,19 @@ def transform_numeric_target_feature_to_binary(the_df: pd.DataFrame, target_col:
     the_df[target_col] = (the_df[target_col] >= threshold) * 1
 
     return the_df
+
+
+@print_function_name
+def replace_columns_spaces_with_underscores(the_df):
+    """
+    Replace spaces in DataFrame column names with underscores.
+
+    Parameters:
+    - the_df (pd.DataFrame): DataFrame whose column names need modification.
+
+    Returns:
+    - pd.DataFrame: DataFrame with updated column names.
+    """
+    the_df.columns = the_df.columns.str.replace("_/_", "/")
+    the_df.columns = the_df.columns.str.replace(" ", "_")
+    return the_df

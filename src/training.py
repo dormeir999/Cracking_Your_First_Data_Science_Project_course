@@ -1,6 +1,13 @@
-import pandas as pd
+import sys
+import os
 
-from utils import print_function_name, import_data, transform_numeric_target_feature_to_binary
+# Add the 'src' directory to the Python path - needed when running from jupyter environment, etc.
+sys.path.append(os.path.abspath('src'))
+sys.path.append(os.path.abspath('../src'))
+
+import pandas as pd
+import numpy as np
+from utils import *
 
 from datetime import datetime
 from sklearn import tree
@@ -24,12 +31,6 @@ from functools import partial
 from sklearn.manifold import TSNE
 import pickle
 from sklearn.base import BaseEstimator
-
-
-
-
-
-
 
 
 @print_function_name
@@ -698,22 +699,6 @@ def add_target_to_train_statistics(the_train_target, the_train_statistics, targe
     the_train_statistics = pd.concat(
         [the_train_statistics['is_target'], the_train_statistics.drop(columns=['is_target'])], axis=1)
     return the_train_statistics
-
-
-@print_function_name
-def replace_columns_spaces_with_underscores(the_df):
-    """
-    Replace spaces in DataFrame column names with underscores.
-
-    Parameters:
-    - the_df (pd.DataFrame): DataFrame whose column names need modification.
-
-    Returns:
-    - pd.DataFrame: DataFrame with updated column names.
-    """
-    the_df.columns = the_df.columns.str.replace("_/_", "/")
-    the_df.columns = the_df.columns.str.replace(" ", "_")
-    return the_df
 
 
 @print_function_name
